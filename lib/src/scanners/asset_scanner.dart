@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 import 'project_context.dart';
 
 /// Finds asset files that no Dart code (or tool configuration) refers to.
@@ -36,7 +36,7 @@ class AssetScanner {
   };
 
   /// Returns every unused asset, sorted by path.
-  List<SweepItem> scan() {
+  List<TrimItem> scan() {
     final declarations = _readDeclarations();
 
     final candidates = <String>{...declarations.files};
@@ -52,7 +52,7 @@ class AssetScanner {
     final identifiers =
         context.usesFlutterGen ? _handWrittenIdentifiers() : const <String>{};
 
-    final items = <SweepItem>[];
+    final items = <TrimItem>[];
     for (final relative in candidates.toList()..sort()) {
       if (!context.filter.canReport(relative)) continue;
       final file = File(context.absolute(relative));
@@ -61,8 +61,8 @@ class AssetScanner {
 
       final declared = declarations.files.contains(relative);
       items.add(
-        SweepItem(
-          type: SweepItemType.asset,
+        TrimItem(
+          type: TrimItemType.asset,
           path: file.path,
           relativePath: relative,
           name: p.posix.basename(relative),
@@ -214,7 +214,7 @@ class AssetScanner {
     for (final entity in rootDir.listSync(followLinks: false)) {
       if (entity is! File) continue;
       final name = p.basename(entity.path);
-      const skip = {'pubspec.yaml', 'pubspec.lock', 'flutter_sweeper.yaml'};
+      const skip = {'pubspec.yaml', 'pubspec.lock', 'flutter_trim.yaml'};
       if ((name.endsWith('.yaml') || name.endsWith('.yml')) &&
           !skip.contains(name)) {
         try {

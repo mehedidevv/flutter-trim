@@ -3,8 +3,9 @@ import 'dart:io';
 import 'package:mason_logger/mason_logger.dart';
 
 import '../cleaners/file_cleaner.dart';
-import '../models/sweep_item.dart';
-import '../utils/logger.dart';
+import '../models/trim_item.dart';
+import 'reporter.dart';
+import 'ui.dart';
 
 /// Choices offered for every item.
 enum PromptDecision {
@@ -18,7 +19,7 @@ enum PromptDecision {
   deleteAll('Delete all remaining'),
 
   /// Stop and leave everything that is left.
-  quit('Skip all / Quit');
+  quit('Quit and keep the rest');
 
   const PromptDecision(this.label);
 
@@ -29,7 +30,8 @@ enum PromptDecision {
 /// Walks the user through findings one by one with an arrow-key menu.
 class InteractivePrompt {
   /// Creates a prompt that talks through [logger] and deletes with [cleaner].
-  InteractivePrompt({required this.logger, required this.cleaner});
+  InteractivePrompt({required this.logger, required this.cleaner, Ui? ui})
+      : ui = ui ?? Ui();
 
   /// Terminal used for output, menus and confirmations.
   final Logger logger;
@@ -37,20 +39,23 @@ class InteractivePrompt {
   /// Performs the actual deletions.
   final FileCleaner cleaner;
 
-  static const int _previewLines = 4;
+  /// Box renderer for the item cards.
+  final Ui ui;
+
+  static const int _previewLines = 6;
 
   /// Asks about each of [items] in order and returns what happened.
-  SweepStats run(List<SweepItem> items) {
-    final stats = SweepStats();
+  TrimStats run(List<TrimItem> items) {
+    final stats = TrimStats();
     var deleteAll = false;
 
     for (var i = 0; i < items.length; i++) {
       final item = items[i];
 
       if (!deleteAll) {
-        _describe(item, i + 1, items.length);
+        _describe(item, i + 1, items.length, stats);
         final decision = logger.chooseOne<PromptDecision>(
-          'What should flutter_sweeper do?',
+          'What do you want to do?',
           choices: PromptDecision.values,
           defaultValue: PromptDecision.keep,
           display: (choice) => choice.label,
@@ -58,6 +63,7 @@ class InteractivePrompt {
 
         if (decision == PromptDecision.keep) {
           stats.kept++;
+          logger.info('${Ui.indent}${paint(lightGreen, '●')} Kept');
           continue;
         }
         if (decision == PromptDecision.quit) {
@@ -84,50 +90,65 @@ class InteractivePrompt {
     return stats;
   }
 
-  void _describe(SweepItem item, int position, int total) {
-    final header = ' ${item.typeLabel} · $position/$total ';
-    final ruleLength = header.length >= 46 ? 4 : 50 - header.length;
-    logger
-      ..info('')
-      ..info(paint(darkGray, '──$header${'─' * ruleLength}'))
-      ..info(_row('Name', paint(styleBold, item.displayName)))
-      ..info(_row('Location', paint(lightCyan, item.location)))
-      ..info(_row('Size', formatBytes(item.sizeBytes)))
-      ..info(_row('Reason', item.reason));
-    for (final companion in item.companionPaths) {
-      logger.info(_row('Also', companion));
-    }
-    if (item.isDeclaration && item.lineNumber != null) _preview(item);
+  void _describe(TrimItem item, int position, int total, TrimStats stats) {
+    final details = <String>[
+      paint(styleBold, item.displayName),
+      '${paint(lightCyan, item.location)}'
+          '${paint(darkGray, '  ·  ${formatBytes(item.sizeBytes)}')}',
+      paint(darkGray, item.reason),
+      for (final companion in item.companionPaths)
+        paint(darkGray, '+ also deletes $companion'),
+    ];
+    final preview = item.isDeclaration ? _preview(item) : const <String>[];
+
+    logger.info('');
+    ui.box(
+      [details, if (preview.isNotEmpty) preview],
+      title: item.typeLabel,
+      titleColor: _colorFor(item),
+      trailing: '$position / $total',
+    ).forEach(logger.info);
+    logger.info(
+      '${Ui.indent}${Ui.progressBar(position - 1, total)} '
+      '${paint(darkGray, '${stats.deleted} deleted · ${stats.kept} kept')}',
+    );
   }
 
-  static String _row(String label, String value) =>
-      '  ${paint(darkGray, label.padRight(8))} $value';
+  static AnsiCode _colorFor(TrimItem item) => switch (item.type) {
+        TrimItemType.asset => lightMagenta,
+        TrimItemType.file => lightYellow,
+        TrimItemType.declaration => lightCyan,
+      };
 
-  void _preview(SweepItem item) {
+  List<String> _preview(TrimItem item) {
+    final line = item.lineNumber;
+    if (line == null) return const [];
     try {
       final lines = File(item.path).readAsLinesSync();
-      final start = item.lineNumber! - 1;
-      final end = start + _previewLines < lines.length
-          ? start + _previewLines
-          : lines.length;
-      for (var i = start; i < end; i++) {
-        final number = '${i + 1}'.padLeft(5);
-        logger.info(paint(darkGray, '  $number │ ${lines[i]}'));
-      }
+      final start = line - 1;
+      final end = (start + _previewLines).clamp(0, lines.length);
+      return [
+        for (var i = start; i < end; i++)
+          '${paint(darkGray, '${i + 1}'.padLeft(5))} '
+              '${paint(darkGray, '│')} '
+              '${lines[i].replaceAll('\t', '  ')}',
+      ];
     } on FileSystemException {
-      // The preview is best effort only.
+      return const []; // The preview is best effort only.
     }
   }
 
-  void _delete(SweepItem item, SweepStats stats) {
+  void _delete(TrimItem item, TrimStats stats) {
     final result = cleaner.clean(item);
     if (result.success) {
       stats.deleted++;
       stats.bytesFreed += result.bytesFreed;
-      if (item.type != SweepItemType.asset) stats.touchedDartCode = true;
-      final extra = result.message == null ? '' : ' (${result.message})';
+      if (item.type != TrimItemType.asset) stats.touchedDartCode = true;
+      final extra = result.message == null ? '' : ', ${result.message}';
       logger.info(
-        '  ${paint(lightRed, '✗ Deleted')} ${item.displayName}$extra',
+        '${Ui.indent}${paint(lightRed, '✗')} Deleted '
+        '${paint(styleBold, item.displayName)} '
+        '${paint(darkGray, '(${formatBytes(result.bytesFreed)} freed$extra)')}',
       );
     } else {
       stats.failed++;

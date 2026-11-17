@@ -1,31 +1,31 @@
-# Contributing to flutter_sweeper
+# Contributing to flutter_trim
 
 Thanks for helping! Bug reports, false-positive reports and pull requests are
 all welcome.
 
 ## Reporting a false positive
 
-flutter_sweeper must never report code or assets that are actually used. If
+flutter_trim must never report code or assets that are actually used. If
 it does, please open an issue with:
 
-- the `fsweep` version (`fsweep --version`) and `dart --version`,
+- the `ftrim` version (`ftrim --version`) and `dart --version`,
 - the reported item (type, name, location),
 - a minimal snippet showing how the item is used.
 
 ## Development setup
 
 ```sh
-git clone https://github.com/mehedidevv/flutter_sweeper.git
-cd flutter_sweeper
+git clone https://github.com/mehedidevv/flutter-trim.git
+cd flutter-trim
 dart pub get
 dart test
-dart run bin/flutter_sweeper.dart --help
+dart run bin/flutter_trim.dart --help
 ```
 
 Try it on a real project without deleting anything:
 
 ```sh
-dart run bin/flutter_sweeper.dart -p ../some_flutter_app --dry-run
+dart run bin/flutter_trim.dart -p ../some_flutter_app --dry-run
 ```
 
 ## Before opening a pull request

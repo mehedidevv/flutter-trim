@@ -1,17 +1,17 @@
-name: flutter_sweeper
+name: flutter_trim
 description: >-
   Interactive CLI that finds unused assets, Dart files, classes, functions and
   methods in Flutter projects and lets you keep or delete each one safely.
 version: 1.0.0
-homepage: https://github.com/mehedidevv/flutter_sweeper
-repository: https://github.com/mehedidevv/flutter_sweeper
-issue_tracker: https://github.com/mehedidevv/flutter_sweeper/issues
+homepage: https://github.com/mehedidevv/flutter-trim
+repository: https://github.com/mehedidevv/flutter-trim
+issue_tracker: https://github.com/mehedidevv/flutter-trim/issues
 
 topics:
   - flutter
   - cli
   - cleanup
-  - assets
+  - dead-code
   - code-quality
 
 environment:
@@ -33,5 +33,5 @@ dev_dependencies:
   test: ^1.25.0
 
 executables:
-  flutter_sweeper: flutter_sweeper
-  fsweep: flutter_sweeper
+  flutter_trim: flutter_trim
+  ftrim: flutter_trim

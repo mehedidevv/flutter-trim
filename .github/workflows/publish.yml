@@ -1,9 +1,9 @@
 # Publishes to pub.dev when a version tag (v1.2.3) is pushed.
 #
 # One-time setup, after the first manual `dart pub publish`:
-#   pub.dev → flutter_sweeper → Admin → Automated publishing →
+#   pub.dev → flutter_trim → Admin → Automated publishing →
 #   Enable publishing from GitHub Actions, repository
-#   mehedidevv/flutter_sweeper, tag pattern `v{{version}}`.
+#   mehedidevv/flutter-trim, tag pattern `v{{version}}`.
 # The package then shows a "Published by GitHub Actions" verified badge.
 name: Publish to pub.dev
 

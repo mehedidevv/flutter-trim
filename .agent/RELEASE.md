@@ -10,10 +10,11 @@ Semantic versioning:
 The version lives in `pubspec.yaml` and `lib/src/version.dart`. A test
 fails if they differ.
 
-## State of 1.0.0 (2026-11-17)
+## State of flutter_trim 1.0.0 (2026-11-17)
 Done:
-- `dart format`, `dart analyze --fatal-infos` and `dart test` (24 tests)
+- `dart format`, `dart analyze --fatal-infos` and `dart test` (32 tests)
   are all clean.
+- Real-project accuracy check passed (see TESTING.md).
 - `lib/` analyzes clean against the lowest dependency versions
   (`dart pub downgrade`).
 - Dependencies allow the latest majors (analyzer <15, lints 6, test 1.x).
@@ -22,13 +23,12 @@ Done:
 - `example/example.dart` and `example/README.md` exist.
 - All public API members have dartdoc comments.
 - `.pubignore` excludes `.agent/`, `.github/`, IDE and build files.
-- `dart pub publish --dry-run`: **0 warnings**, 29 KB (validated from a copy
-  at a path without spaces).
+- `dart pub publish --dry-run`: **0 warnings**.
 - CI (`.github/workflows/ci.yml`) and tag-based automated publishing
   (`publish.yml`).
 - CONTRIBUTING.md, issue templates and a PR template.
 
-- Repository URLs point at https://github.com/mehedidevv/flutter_sweeper,
+- Repository URLs point at https://github.com/mehedidevv/flutter-trim,
   and the project is its own git repository.
 
 Remaining (manual, by the owner):
@@ -39,7 +39,7 @@ Remaining (manual, by the owner):
 ## First publish
 
 ```sh
-cd flutter_sweeper            # must be its own git repo (see KNOWN_ISSUES)
+cd flutter-trim               # must be its own git repo (see KNOWN_ISSUES)
 dart pub get
 dart format --output=none --set-exit-if-changed .
 dart analyze --fatal-infos
@@ -51,7 +51,7 @@ git tag v1.0.0 && git push --tags
 
 Then on pub.dev → package → **Admin**:
 - Enable **Automated publishing** from GitHub Actions
-  (repository `mehedidevv/flutter_sweeper`, tag pattern
+  (repository `mehedidevv/flutter-trim`, tag pattern
   `v{{version}}`).
 - Optionally transfer the package to your verified publisher.
 

@@ -4,9 +4,9 @@ import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 
-/// Settings read from an optional `flutter_sweeper.yaml` and merged with CLI
+/// Settings read from an optional `flutter_trim.yaml` and merged with CLI
 /// flags.
 ///
 /// ```yaml
@@ -26,9 +26,9 @@ import '../models/sweep_item.dart';
 ///   code: true
 ///   methods: true
 /// ```
-class SweeperConfig {
+class TrimConfig {
   /// Creates a configuration. The defaults scan everything.
-  const SweeperConfig({
+  const TrimConfig({
     this.exclude = const [],
     this.entryPoints = const [],
     this.keep = const {},
@@ -41,7 +41,7 @@ class SweeperConfig {
 
   /// Builds a configuration from a parsed YAML map. Unknown keys are
   /// ignored, and a single string is accepted where a list is expected.
-  factory SweeperConfig.fromMap(Map<dynamic, dynamic> map) {
+  factory TrimConfig.fromMap(Map<dynamic, dynamic> map) {
     final scan = map['scan'];
     bool flag(String key) {
       if (scan is Map) {
@@ -51,7 +51,7 @@ class SweeperConfig {
       return true;
     }
 
-    return SweeperConfig(
+    return TrimConfig(
       exclude: _stringList(map['exclude']),
       entryPoints: _stringList(map['entry_points']),
       keep: _stringList(map['keep']).toSet(),
@@ -94,7 +94,7 @@ class SweeperConfig {
   final bool scanMethods;
 
   /// Returns a copy with the given fields replaced.
-  SweeperConfig copyWith({
+  TrimConfig copyWith({
     List<String>? exclude,
     List<String>? entryPoints,
     Set<String>? keep,
@@ -104,7 +104,7 @@ class SweeperConfig {
     bool? scanCode,
     bool? scanMethods,
   }) {
-    return SweeperConfig(
+    return TrimConfig(
       exclude: exclude ?? this.exclude,
       entryPoints: entryPoints ?? this.entryPoints,
       keep: keep ?? this.keep,
@@ -123,35 +123,35 @@ class SweeperConfig {
   }
 }
 
-/// Loads `flutter_sweeper.yaml` from a project root.
+/// Loads `flutter_trim.yaml` from a project root.
 abstract final class ConfigLoader {
   /// Name of the optional configuration file.
-  static const String fileName = 'flutter_sweeper.yaml';
+  static const String fileName = 'flutter_trim.yaml';
 
   /// Reads [fileName] from [projectRoot], or returns the defaults when the
-  /// file does not exist. Throws a [SweeperException] for invalid YAML.
-  static SweeperConfig load(String projectRoot) {
+  /// file does not exist. Throws a [TrimException] for invalid YAML.
+  static TrimConfig load(String projectRoot) {
     final file = File(p.join(projectRoot, fileName));
-    if (!file.existsSync()) return const SweeperConfig();
+    if (!file.existsSync()) return const TrimConfig();
 
     final doc = _parse(file);
-    if (doc == null) return const SweeperConfig();
+    if (doc == null) return const TrimConfig();
     if (doc is! Map) {
-      throw const SweeperException(
+      throw const TrimException(
         '$fileName must contain a YAML map at the top level.',
         exitCode: ExitCodes.config,
       );
     }
-    // Allow the settings to be nested under a `flutter_sweeper:` key too.
-    final nested = doc['flutter_sweeper'];
-    return SweeperConfig.fromMap(nested is Map ? nested : doc);
+    // Allow the settings to be nested under a `flutter_trim:` key too.
+    final nested = doc['flutter_trim'];
+    return TrimConfig.fromMap(nested is Map ? nested : doc);
   }
 
   static Object? _parse(File file) {
     try {
       return loadYaml(file.readAsStringSync());
     } on YamlException catch (e) {
-      throw SweeperException(
+      throw TrimException(
         'Invalid $fileName: ${e.message}',
         exitCode: ExitCodes.config,
       );

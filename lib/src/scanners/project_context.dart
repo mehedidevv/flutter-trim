@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:analyzer/dart/analysis/utilities.dart';
@@ -7,14 +8,14 @@ import 'package:analyzer/source/line_info.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 import '../utils/config_loader.dart';
 
 /// Marker comment that protects a declaration from being reported.
-const String keepMarker = 'flutter_sweeper:keep';
+const String keepMarker = 'flutter_trim:keep';
 
 /// Marker comment that excludes a whole file from every scanner's findings.
-const String ignoreFileMarker = 'flutter_sweeper:ignore_file';
+const String ignoreFileMarker = 'flutter_trim:ignore_file';
 
 /// A Dart file parsed once and shared by every scanner.
 class ParsedDartFile {
@@ -65,7 +66,7 @@ class ParsedDartFile {
   /// stream, so `/// [Foo]` doc references are deliberately not counted).
   late final List<Token> identifiers = _collectIdentifiers();
 
-  /// Whether the file contains `// flutter_sweeper:ignore_file`.
+  /// Whether the file contains `// flutter_trim:ignore_file`.
   late final bool isIgnored = content.contains(ignoreFileMarker);
 
   /// Whether the file is a `part of` another library.
@@ -112,15 +113,15 @@ class ProjectContext {
 
   /// Reads `pubspec.yaml` and parses every Dart file under [rootPath].
   ///
-  /// Throws a [SweeperException] when the pubspec is missing or invalid.
+  /// Throws a [TrimException] when the pubspec is missing or invalid.
   factory ProjectContext.load(
     String rootPath, {
-    SweeperConfig config = const SweeperConfig(),
+    TrimConfig config = const TrimConfig(),
   }) {
     final root = p.normalize(p.absolute(rootPath));
     final pubspecFile = File(p.join(root, 'pubspec.yaml'));
     if (!pubspecFile.existsSync()) {
-      throw SweeperException(
+      throw TrimException(
         'No pubspec.yaml found in $root.',
         exitCode: ExitCodes.noInput,
       );
@@ -130,10 +131,10 @@ class ProjectContext {
     try {
       pubspec = loadYaml(pubspecFile.readAsStringSync());
     } on YamlException catch (e) {
-      throw SweeperException('Invalid pubspec.yaml: ${e.message}');
+      throw TrimException('Invalid pubspec.yaml: ${e.message}');
     }
     if (pubspec is! Map || pubspec['name'] is! String) {
-      throw const SweeperException('pubspec.yaml has no package "name".');
+      throw const TrimException('pubspec.yaml has no package "name".');
     }
 
     final dartFiles = <ParsedDartFile>[];
@@ -153,7 +154,7 @@ class ProjectContext {
             ParsedDartFile.parse(
               path: absolute,
               relativePath: relative,
-              content: entity.readAsStringSync(),
+              content: _read(entity),
             ),
           );
         } on Object catch (e) {
@@ -184,7 +185,7 @@ class ProjectContext {
   final Map<dynamic, dynamic> pubspec;
 
   /// Effective configuration.
-  final SweeperConfig config;
+  final TrimConfig config;
 
   /// Decides which paths may be reported.
   final PathFilter filter;
@@ -193,16 +194,31 @@ class ProjectContext {
   final List<ParsedDartFile> dartFiles;
 
   /// Files that could not be read, keyed by relative path.
+  ///
+  /// Their references are unknown, so the CLI warns when this is not empty.
   final Map<String, String> skippedFiles;
 
   late final Map<String, ParsedDartFile> _byPath = {
     for (final file in dartFiles) file.path: file,
   };
 
+  /// Lower-cased path to file, used when an import differs from the file on
+  /// disk only by letter case. macOS and Windows accept such imports, so the
+  /// app compiles and the file is used.
+  late final Map<String, ParsedDartFile> _byLowerCasePath = {
+    for (final file in dartFiles) file.path.toLowerCase(): file,
+  };
+
   /// The parsed file at [absolutePath], or `null` if it is not a project
   /// source.
-  ParsedDartFile? fileAt(String absolutePath) =>
-      _byPath[p.normalize(absolutePath)];
+  ///
+  /// An exact match wins. Otherwise a file whose path differs only by letter
+  /// case is returned, because case-insensitive file systems resolve such
+  /// imports.
+  ParsedDartFile? fileAt(String absolutePath) {
+    final normalized = p.normalize(absolutePath);
+    return _byPath[normalized] ?? _byLowerCasePath[normalized.toLowerCase()];
+  }
 
   /// Project-relative path with `/` separators.
   String relative(String absolutePath) => _toRelative(root, absolutePath);
@@ -223,6 +239,11 @@ class ProjectContext {
     }
     return false;
   }
+
+  /// Reads a source file. Invalid UTF-8 (for example a Latin-1 comment) is
+  /// replaced instead of failing, so the file's references are never lost.
+  static String _read(File file) =>
+      utf8.decode(file.readAsBytesSync(), allowMalformed: true);
 
   static String _toRelative(String root, String absolutePath) =>
       p.split(p.relative(absolutePath, from: root)).join('/');

@@ -1,72 +1,75 @@
-# Architecture: flutter_sweeper
+# Architecture: flutter_trim
 
 ## 1. High-level view
 
 ```
-bin/flutter_sweeper.dart
+bin/flutter_trim.dart
         │  run(args) → exit code
         ▼
 ┌──────────────────────────── CLI layer (lib/src/cli) ────────────────────────────┐
-│ SweeperCommandRunner                                                            │
+│ TrimCommandRunner                                                               │
 │   parse args → load config → ProjectContext.load → scanners → report → prompt  │
-│ InteractivePrompt  (Keep / Delete / Delete all / Quit loop)                     │
+│ TrimReporter / InteractivePrompt  → render with Ui (boxes, tables, progress)    │
 └──────────────┬──────────────────────────────┬───────────────────────────────────┘
                │                              │
                ▼                              ▼
 ┌──── Scanners (lib/src/scanners) ────┐   ┌── Cleaner (lib/src/cleaners) ──┐
 │ ProjectContext  (parse once, share) │   │ FileCleaner                     │
-│ AssetScanner    → List<SweepItem>   │   │  delete files / remove AST node │
-│ FileScanner     → List<SweepItem>   │   │  re-parse + syntax-error guard  │
-│ CodeScanner     → List<SweepItem>   │   └────────────┬────────────────────┘
+│ AssetScanner    → List<TrimItem>    │   │  delete files / remove AST node │
+│ FileScanner     → List<TrimItem>    │   │  re-parse + syntax-error guard  │
+│ CodeScanner     → List<TrimItem>    │   └────────────┬────────────────────┘
 │ DeclarationUtils (shared w/ cleaner)│◄───────────────┘
 └──────────────┬──────────────────────┘
                ▼
 ┌── Models & utils ────────────────────────────────────────────────┐
-│ SweepItem, SweepItemType, DeclarationKind, ExitCodes,            │
-│ SweeperException (models/sweep_item.dart)                        │
-│ SweeperConfig, ConfigLoader, PathFilter (utils/config_loader)    │
-│ SweepReporter, SweepStats, formatBytes, paint (utils/logger)     │
+│ TrimItem, TrimItemType, DeclarationKind, ExitCodes,              │
+│ TrimException (models/trim_item.dart)                            │
+│ TrimConfig, ConfigLoader, PathFilter (utils/config_loader)       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 Dependencies only point **downward**: CLI → scanners/cleaner → models/utils.
 Scanners never print. All output goes through `mason_logger.Logger`, which is
-owned by the CLI layer.
+owned by the CLI layer; layout primitives live in `cli/ui.dart`.
 
-## 2. Run pipeline (`SweeperCommandRunner._sweep`)
+## 2. Run pipeline (`TrimCommandRunner._trim`)
 
 1. **Validate input.** `--path` must exist and contain `pubspec.yaml`
    (otherwise exit 66). Flag conflicts give exit 64.
-2. **Config.** `ConfigLoader.load(root)` reads `flutter_sweeper.yaml`, then
+2. **Config.** `ConfigLoader.load(root)` reads `flutter_trim.yaml`, then
    CLI overrides are merged with `copyWith`: `--exclude` is *appended*, and
    `--[no-]methods` *replaces* `scan.methods` only if it was passed
-   explicitly (`results.wasParsed`).
-3. **Context.** `ProjectContext.load` parses the pubspec and every `.dart`
+   explicitly (`results.wasParsed`). `--json` implies dry run.
+3. **Banner** (skipped for `--json`): project, mode, scope.
+4. **Context.** `ProjectContext.load` parses the pubspec and every `.dart`
    file in `lib, bin, test, integration_test, test_driver, tool`. Hidden path
-   segments are skipped. Parse failures go into `skippedFiles`.
-4. **Scan**, in this fixed order:
+   segments are skipped. Files are decoded leniently (invalid UTF-8 is
+   replaced); anything still unreadable goes into `skippedFiles` and
+   produces a visible warning.
+5. **Scan**, in this fixed order, each behind a spinner (`_step`):
    1. `AssetScanner` (unless `--code-only` / `scan.assets: false`)
    2. `FileScanner` (unless `--assets-only` / `scan.files: false`)
    3. `CodeScanner(skipFiles: unusedFiles)`. This needs the FileScanner
       output, so declarations in dead files aren't reported twice.
-5. **Report.** `SweepReporter.printReport` shows grouped box-drawing tables.
-6. **Exit early** if there are no items, it's a dry run, or the terminal
-   isn't interactive.
-7. **Git safety check.** Walk up the folders looking for `.git` (a dir or a
+6. **Output.** `--json` → `_printJson` and exit. No items → `printClean`.
+   Otherwise `printReport` (summary table + one table per category).
+7. **Exit early** for dry runs or a non-interactive terminal.
+   `--fail-on-findings` turns "items found" into exit 1 on these paths.
+8. **Git safety check.** Walk up the folders looking for `.git` (a dir or a
    file, which supports worktrees and submodules). If none is found, ask to
    confirm.
-8. **Interactive loop.** `InteractivePrompt.run` calls `FileCleaner.clean`
-   per item and returns `SweepStats`.
-9. **Summary.** Exit 1 if any deletion failed, otherwise 0.
+9. **Interactive loop.** `InteractivePrompt.run` shows a card per item,
+   calls `FileCleaner.clean` on Delete and returns `TrimStats`.
+10. **Session summary** with next steps. Exit 1 if any deletion failed.
 
 ## 3. Core data model
 
-`SweepItem` is the only currency between layers. It is immutable and holds:
+`TrimItem` is the only currency between layers. It is immutable and holds:
 `type` (asset | file | declaration), `path` (absolute), `relativePath`
 (posix), `name`, `sizeBytes`, `reason`, plus the optional `lineNumber`,
 `kind`, `parentName` and `companionPaths`. Derived values: `typeLabel`,
 `displayName` (`Parent.method`), `location` (`path:line`), and
-`isDeclaration`. `toJson()` exists for future machine output.
+`isDeclaration`. `toJson()` feeds `--json`.
 
 ## 4. Key components and algorithms
 
@@ -75,10 +78,15 @@ owned by the CLI layer.
   `throwIfDiagnostics: false`) and `LineInfo`, plus these lazy values:
   - `identifiers`: every identifier token from the token stream. Comments
     aren't tokens, so `/// [Foo]` doesn't count as a usage.
-  - `isIgnored`: the content contains `flutter_sweeper:ignore_file`.
+  - `isIgnored`: the content contains `flutter_trim:ignore_file`.
   - `isPartOf`: the file has a `part of` directive.
 - Paths: the absolute form is OS-native and normalized. The relative form
-  always uses `/`. `fileAt()` looks a file up by its normalized absolute path.
+  always uses `/`.
+- `fileAt(path)`: exact match first, then a **case-insensitive** match.
+  macOS and Windows compile imports whose case differs from the file on disk
+  (`gatewayController.dart` → `gateWayController.dart`), so such files are
+  used. On case-sensitive systems these imports would not compile, so the
+  fallback never hides a real problem.
 - `usesFlutterGen`: a `flutter_gen`/`flutter_gen_runner` dependency, or an
   `assets.gen.dart` file.
 
@@ -99,9 +107,13 @@ owned by the CLI layer.
 ### 4.3 FileScanner: reachability BFS
 - Entry points, then a BFS over `NamespaceDirective` URIs (including the
   `configurations` used by conditional imports) and `PartDirective` URIs.
-- `_resolve`: `package:<self>/x` maps to `lib/x`. Other packages, `dart:`
-  and anything with a scheme are ignored. Relative URIs resolve against the
+- `resolveUri(uri, fromFile)` uses `Uri.parse`, so `pathSegments` are
+  **percent-decoded** (`common%20widget` → `common widget`).
+  `package:<self>/x` maps to `lib/x`. Other packages, `dart:` and anything
+  with a scheme or authority are ignored. Relative URIs resolve against the
   importing file's folder.
+- Every resolved target goes through `ProjectContext.fileAt`, and the BFS
+  stores the *on-disk* path, so case-mismatched imports keep the walk going.
 - Findings are unreachable `lib/` files that aren't `part of`, ignored or
   filtered. Their `part` URIs become companions.
 
@@ -117,7 +129,7 @@ owned by the CLI layer.
 - Methods whose parent container is unused are dropped, because they go
   away with the parent.
 - Protection layers, in order: `main`, the `keep` list, `@pragma` or
-  `@protected` metadata, a `// flutter_sweeper:keep` marker in the region
+  `@protected` metadata, a `// flutter_trim:keep` marker in the region
   from the line above the node through its first non-comment token. Methods
   are also skipped for operators, getters, setters, abstract, external,
   `@override`, `_conventionalMethods`, and a container with `@pragma`.
@@ -153,11 +165,10 @@ because `isAbstract` is deprecated.
   its left is whitespace back to a newline), the trailing whitespace, CR/LF,
   and one extra blank line when the line before is blank, `{`, or the start
   of the file.
-- `dryRun` mode computes the results without writing. The CLI doesn't use
-  it today, because `--dry-run` exits before cleaning.
+- `dryRun` mode computes the results without writing (API only).
 
 ### 4.7 Config and filtering
-- `SweeperConfig` is immutable and has `fromMap` and `copyWith`. Unknown
+- `TrimConfig` is immutable and has `fromMap` and `copyWith`. Unknown
   keys are ignored.
 - `PathFilter.canReport = !isGenerated && !isExcluded`. Globs use
   `p.posix` context and are matched against project-relative paths.
@@ -165,12 +176,18 @@ because `isAbstract` is deprecated.
   usage index*.
 
 ### 4.8 Presentation
-- `SweepReporter`: header, grouped tables (columns are capped at
-  `[4,12,40,60,10]`, values are left-truncated with `…` so file names stay
-  visible), and the summary.
-- `InteractivePrompt`: `logger.chooseOne` with arrow-key navigation,
-  `logger.confirm`, and the code preview (4 lines from the declaration
-  line).
+- `Ui` (cli/ui.dart) renders rounded boxes (title + trailing text on the top
+  border, sections split by rules), bordered tables (right-aligned columns,
+  one `shrink` column that is shortened from the start so file names stay
+  visible) and a progress bar. Width = terminal columns − 4, clamped to
+  60–110. All width math uses `visibleLength`, which ignores ANSI codes.
+- `TrimReporter`: banner box, settings, summary table with a total row,
+  per-category tables (files and assets show the *folder*; declarations
+  show `path:line`), clean / dry-run messages, session summary box with
+  next steps.
+- `InteractivePrompt`: one box per item (color by type, `n / total`,
+  6-line code preview for declarations), progress bar with running counts,
+  then `logger.chooseOne` (arrow keys) and `logger.confirm` for bulk delete.
 
 ## 5. Design decisions (ADR-style summary)
 
@@ -186,15 +203,18 @@ because `isAbstract` is deprecated.
 | D8 | Non-TTY → report only | CI-safe and pipe-safe | No `--yes` auto-delete mode yet. |
 | D9 | sysexits exit codes | Standard and scriptable | |
 | D10 | `Logger` and `interactive` are injectable in the runner | Testable without a TTY | |
-| D11 | Version-agnostic AST access (tokens and `childEntities`) | One release supports analyzer 6–14, so it works on Dart 3.0 through the latest SDK and gets full pub points for up-to-date dependencies | Slightly less direct code. New analyzer majors must be checked. |
+| D11 | Version-agnostic AST access (tokens and `childEntities`) | One release supports analyzer 6–14, so it works on Dart 3.0 through the latest SDK | Slightly less direct code. New analyzer majors must be checked. |
+| D12 | Percent-decode URIs and match files case-insensitively as a fallback | Real apps use folders with spaces and inconsistent file-name casing; exact matching reported used files (found on 400–600 file apps) | A case-insensitive match could, in theory, pick the wrong file when two files differ only by case; that layout cannot exist on macOS/Windows and is very rare elsewhere. |
+| D13 | Read sources with `allowMalformed: true` | A file that fails to decode would drop its references and cause false positives | Replacement characters in comments/strings only. |
 
 ## 6. Extension points
 
-- **New scanner:** implement `List<SweepItem> scan()` using `ProjectContext`.
-  Add a `SweepItemType` if needed (and update `_title` in the reporter and
-  the `FileCleaner.clean` switch). Wire it into `_sweep` with `_scan(label, …)`,
-  add a `scan.<key>` config flag, export it from the barrel, and add tests.
+- **New scanner:** implement `List<TrimItem> scan()` using `ProjectContext`.
+  Add a `TrimItemType` if needed (and update `TrimReporter.title`, the
+  colors in `InteractivePrompt._colorFor` and the `FileCleaner.clean`
+  switch). Wire it into `_trim` with `_step(...)`, add a `scan.<key>` config
+  flag, export it from the barrel, and add tests.
 - **New declaration kind:** extend `DeclarationKind` and
   `DeclarationUtils.kindOf` / `locate`. Check that `removeRange` handles it.
-- **New output format** (for example `--json`): use `SweepItem.toJson()` in
-  the runner, and keep human output going through `Logger`.
+- **New output format:** follow `--json` (`_printJson`), and keep human
+  output going through `Logger`.

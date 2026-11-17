@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:analyzer/dart/analysis/utilities.dart';
 
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 import '../scanners/declaration_utils.dart';
 
-/// Outcome of removing one [SweepItem].
+/// Outcome of removing one [TrimItem].
 class CleanResult {
   /// The item was removed and [bytesFreed] bytes were reclaimed.
   const CleanResult.success(this.bytesFreed, {this.message})
@@ -47,18 +47,18 @@ class FileCleaner {
   /// Deletes the file(s) of an asset or Dart file item, or removes a
   /// declaration from its file. Never throws for file-system problems;
   /// they are returned as [CleanResult.failure].
-  CleanResult clean(SweepItem item) {
+  CleanResult clean(TrimItem item) {
     try {
       return switch (item.type) {
-        SweepItemType.asset || SweepItemType.file => _deleteFiles(item),
-        SweepItemType.declaration => _removeDeclaration(item),
+        TrimItemType.asset || TrimItemType.file => _deleteFiles(item),
+        TrimItemType.declaration => _removeDeclaration(item),
       };
     } on FileSystemException catch (e) {
       return CleanResult.failure('${e.message}: ${e.path ?? item.path}');
     }
   }
 
-  CleanResult _deleteFiles(SweepItem item) {
+  CleanResult _deleteFiles(TrimItem item) {
     var freed = 0;
     var removed = 0;
     for (final path in [item.path, ...item.companionPaths]) {
@@ -77,7 +77,7 @@ class FileCleaner {
     );
   }
 
-  CleanResult _removeDeclaration(SweepItem item) {
+  CleanResult _removeDeclaration(TrimItem item) {
     final file = File(item.path);
     if (!file.existsSync()) {
       return const CleanResult.failure('File no longer exists');

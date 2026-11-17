@@ -1,15 +1,17 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:analyzer/dart/analysis/utilities.dart';
-import 'package:flutter_sweeper/flutter_sweeper.dart';
+import 'package:flutter_trim/flutter_trim.dart';
+import 'package:flutter_trim/src/cli/ui.dart';
 import 'package:mason_logger/mason_logger.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 /// Builds a small Flutter-like project on disk. Nothing is resolved, so the
 /// fixture does not need the Flutter SDK.
-Directory createFixture({String? sweeperConfig}) {
-  final root = Directory.systemTemp.createTempSync('flutter_sweeper_test_');
+Directory createFixture({String? trimConfig}) {
+  final root = Directory.systemTemp.createTempSync('flutter_trim_test_');
 
   void write(String relative, String content) {
     final file = File(p.joinAll([root.path, ...relative.split('/')]));
@@ -36,7 +38,7 @@ flutter:
       fonts:
         - asset: assets/fonts/Roboto-Regular.ttf
 ''');
-  if (sweeperConfig != null) write('flutter_sweeper.yaml', sweeperConfig);
+  if (trimConfig != null) write('flutter_trim.yaml', trimConfig);
 
   // Assets.
   write('assets/images/logo.png', 'png');
@@ -85,7 +87,7 @@ class UnusedWidget extends StatelessWidget {
 
 String unusedHelper() => 'x';
 
-// flutter_sweeper:keep
+// flutter_trim:keep
 String keptHelper() => 'kept';
 
 @pragma('vm:entry-point')
@@ -161,7 +163,7 @@ void main() {
     test('respects exclude globs', () {
       final filtered = ProjectContext.load(
         root.path,
-        config: const SweeperConfig(exclude: ['assets/raw/**']),
+        config: const TrimConfig(exclude: ['assets/raw/**']),
       );
       final found = AssetScanner(filtered).scan().map((i) => i.relativePath);
       expect(found, isNot(contains('assets/raw/orphan.txt')));
@@ -188,7 +190,7 @@ void main() {
     test('honours configured entry points', () {
       final configured = ProjectContext.load(
         root.path,
-        config: const SweeperConfig(
+        config: const TrimConfig(
           entryPoints: ['lib/legacy/old_screen.dart'],
         ),
       );
@@ -197,7 +199,7 @@ void main() {
   });
 
   group('CodeScanner', () {
-    List<SweepItem> scanCode({bool methods = true}) {
+    List<TrimItem> scanCode({bool methods = true}) {
       final unusedFiles = {
         for (final item in FileScanner(context).scan()) item.path,
       };
@@ -313,9 +315,9 @@ void main() {
   });
 
   group('ConfigLoader', () {
-    test('reads flutter_sweeper.yaml', () {
+    test('reads flutter_trim.yaml', () {
       final configured = createFixture(
-        sweeperConfig: '''
+        trimConfig: '''
 exclude:
   - lib/legacy/**
 keep:
@@ -343,14 +345,14 @@ scan:
     });
   });
 
-  group('SweeperCommandRunner', () {
+  group('TrimCommandRunner', () {
     test('prints the version', () async {
-      final runner = SweeperCommandRunner(logger: Logger(level: Level.quiet));
+      final runner = TrimCommandRunner(logger: Logger(level: Level.quiet));
       expect(await runner.run(['--version']), ExitCodes.success);
     });
 
     test('rejects conflicting flags', () async {
-      final runner = SweeperCommandRunner(logger: Logger(level: Level.quiet));
+      final runner = TrimCommandRunner(logger: Logger(level: Level.quiet));
       expect(
         await runner.run(['--assets-only', '--code-only']),
         ExitCodes.usage,
@@ -358,7 +360,7 @@ scan:
     });
 
     test('dry run reports without deleting', () async {
-      final runner = SweeperCommandRunner(
+      final runner = TrimCommandRunner(
         logger: Logger(level: Level.quiet),
         interactive: false,
       );
@@ -374,9 +376,9 @@ scan:
     });
 
     test('fails cleanly without a pubspec', () async {
-      final empty = Directory.systemTemp.createTempSync('fsweep_empty_');
+      final empty = Directory.systemTemp.createTempSync('ftrim_empty_');
       addTearDown(() => empty.deleteSync(recursive: true));
-      final runner = SweeperCommandRunner(logger: Logger(level: Level.quiet));
+      final runner = TrimCommandRunner(logger: Logger(level: Level.quiet));
       expect(await runner.run(['-p', empty.path]), ExitCodes.noInput);
     });
   });
@@ -444,6 +446,150 @@ void main() => shape?.toString();
           .toSet();
       expect(names, contains('Shape.unusedDraw'));
       expect(names, isNot(contains('Shape.area')));
+    });
+  });
+
+  // Regressions found by running the tool on real 400-600 file apps.
+  group('Import resolution', () {
+    void write(String relative, String content) {
+      final file = File(p.joinAll([root.path, ...relative.split('/')]));
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(content);
+    }
+
+    void importFromMain(List<String> uris) {
+      final mainFile = File(p.join(root.path, 'lib', 'main.dart'));
+      mainFile.writeAsStringSync(
+        "${uris.map((uri) => "import '$uri';").join('\n')}\n"
+        '${mainFile.readAsStringSync()}',
+      );
+    }
+
+    Set<String> unusedFiles() => FileScanner(ProjectContext.load(root.path))
+        .scan()
+        .map((item) => item.relativePath)
+        .toSet();
+
+    test('decodes %20 in package and relative imports', () {
+      write('lib/common widget/app_bar.dart', "import 'helper.dart';\n");
+      write('lib/common widget/helper.dart', 'class Helper {}\n');
+      write('lib/common widget/divider.dart', 'class Divider2 {}\n');
+      importFromMain([
+        'package:demo_app/common%20widget/app_bar.dart',
+        'common%20widget/divider.dart',
+      ]);
+
+      final unused = unusedFiles();
+      expect(unused, isNot(contains('lib/common widget/app_bar.dart')));
+      expect(unused, isNot(contains('lib/common widget/helper.dart')));
+      expect(unused, isNot(contains('lib/common widget/divider.dart')));
+    });
+
+    test('accepts imports that differ from the file name only by case', () {
+      write(
+        'lib/gateway/gateWayController.dart',
+        "import 'models/gateWayModel.dart';\nclass GateWayController {}\n",
+      );
+      write('lib/gateway/models/gateWayModel.dart', 'class GateWayModel {}\n');
+      // Written with different letter case than the files on disk.
+      importFromMain(['gateway/gatewayController.dart']);
+
+      final unused = unusedFiles();
+      expect(unused, isNot(contains('lib/gateway/gateWayController.dart')));
+      expect(unused, isNot(contains('lib/gateway/models/gateWayModel.dart')));
+      // Their classes are now scanned as part of reachable files.
+      final unusedCode = CodeScanner(ProjectContext.load(root.path))
+          .scan()
+          .map((item) => item.name);
+      expect(unusedCode, contains('GateWayModel'));
+    });
+
+    test('still reports a file nobody imports', () {
+      write('lib/orphan/orphan_page.dart', 'class OrphanPage {}\n');
+      expect(unusedFiles(), contains('lib/orphan/orphan_page.dart'));
+    });
+
+    test('keeps references from files with invalid UTF-8', () {
+      write('lib/widgets/latin.dart', 'class LatinOnlyUser {}\n');
+      importFromMain(['widgets/latin.dart']);
+      final file = File(p.join(root.path, 'lib', 'widgets', 'user.dart'));
+      file.writeAsBytesSync([
+        ...'// caf'.codeUnits,
+        0xE9, // Latin-1 "é", invalid on its own in UTF-8.
+        ...'\nfinal user = LatinOnlyUser();\n'.codeUnits,
+      ]);
+      importFromMain(['widgets/user.dart']);
+
+      final context = ProjectContext.load(root.path);
+      expect(context.skippedFiles, isEmpty);
+      expect(
+        CodeScanner(context).scan().map((item) => item.name),
+        isNot(contains('LatinOnlyUser')),
+      );
+    });
+
+    test('resolveUri ignores other packages and dart: URIs', () {
+      final scanner = FileScanner(context);
+      final from = p.join(root.path, 'lib', 'main.dart');
+      expect(scanner.resolveUri('dart:io', from), isNull);
+      expect(scanner.resolveUri('package:flutter/material.dart', from), isNull);
+      expect(
+        scanner.resolveUri('package:demo_app/a%20b/c.dart', from),
+        p.join(root.path, 'lib', 'a b', 'c.dart'),
+      );
+    });
+  });
+
+  group('CLI output', () {
+    test('--json prints a parseable report and deletes nothing', () async {
+      final result = await Process.run(
+        Platform.resolvedExecutable,
+        ['run', 'bin/flutter_trim.dart', '--json', '-p', root.path],
+      );
+      expect(result.exitCode, ExitCodes.success, reason: '${result.stderr}');
+      final report = jsonDecode(result.stdout as String) as Map;
+      expect(report['tool'], 'flutter_trim');
+      expect((report['summary'] as Map)['total'], greaterThan(0));
+      expect(
+        File(p.join(root.path, 'assets', 'images', 'old_banner.png'))
+            .existsSync(),
+        isTrue,
+      );
+    });
+
+    test('--fail-on-findings exits with 1 when something is unused', () async {
+      final runner = TrimCommandRunner(
+        logger: Logger(level: Level.quiet),
+        interactive: false,
+      );
+      expect(
+        await runner.run(['-p', root.path, '-n', '--fail-on-findings']),
+        ExitCodes.failure,
+      );
+    });
+
+    test('boxes and tables have a constant visible width', () {
+      final ui = Ui(width: 60);
+      final lines = [
+        ...ui.box(
+          [
+            ['short', '\x1B[1mbold text\x1B[0m', 'x' * 200],
+          ],
+          title: 'Class',
+          trailing: '1 / 9',
+        ),
+        ...ui.table(
+          const ['#', 'Name', 'Location'],
+          [
+            ['1', 'Foo', 'lib/${'deep/' * 30}foo.dart'],
+          ],
+          shrink: 2,
+        ),
+      ];
+      for (final line in lines) {
+        expect(visibleLength(line), 60 + Ui.indent.length, reason: line);
+      }
+      expect(lines.join(), contains('foo.dart'));
     });
   });
 

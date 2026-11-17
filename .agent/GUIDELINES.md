@@ -9,7 +9,7 @@ match the existing code.
    cause a *false positive* (reporting used code or assets) needs a test
    proving it doesn't happen. Prefer false negatives.
 2. **Scanners are pure.** Scanners read `ProjectContext` and return
-   `List<SweepItem>`. They don't print, prompt or write to disk. Only
+   `List<TrimItem>`. They don't print, prompt or write to disk. Only
    `FileCleaner` mutates files, and only the CLI layer talks to the user.
 3. **One source of truth for declarations.** Anything about "what is a
    declaration / how to find it" lives in `DeclarationUtils`.
@@ -38,14 +38,14 @@ Conventions seen in the codebase:
 - Dart 3 features are welcome: `switch` expressions, `if-case`
   (`if (_resolve(uri, path) case final part?)`), `abstract final class` for
   static-only holders, and enhanced enums with labels.
-- Immutable value types with `const` constructors (`SweepItem`,
-  `SweeperConfig`, `CleanResult`). Use `copyWith` for overrides.
+- Immutable value types with `const` constructors (`TrimItem`,
+  `TrimConfig`, `CleanResult`). Use `copyWith` for overrides.
 - Private helpers start with `_`. Private data classes (`_Usage`,
   `_Candidate`) stay file-local.
 - Cascades (`..`) for repeated logger calls.
 - Every public class and member gets a `///` doc comment explaining *why*,
   not just *what*.
-- Errors that the user should see: throw `SweeperException(message,
+- Errors that the user should see: throw `TrimException(message,
   exitCode:)`. Never `exit()` outside `bin/`.
 - File-system errors during cleaning become `CleanResult.failure`, not
   exceptions.
@@ -71,10 +71,10 @@ dart test
 ## 4. Adding features: checklist
 
 - [ ] Logic in the right layer (scanner / cleaner / CLI).
-- [ ] Config flag in `SweeperConfig` if the feature can be turned on or off.
+- [ ] Config flag in `TrimConfig` if the feature can be turned on or off.
 - [ ] CLI flag, if any, in the parser **and** in `_printUsage` examples when
       useful.
-- [ ] Exported from `lib/flutter_sweeper.dart` if it's public API (use `show`).
+- [ ] Exported from `lib/flutter_trim.dart` if it's public API (use `show`).
 - [ ] Tests in `test/` using `createFixture()`, covering positives **and**
       "must not report" cases.
 - [ ] README (Features / Usage / Configuration / Limitations), CHANGELOG
@@ -85,7 +85,7 @@ dart test
 - Read `.agent/README.md` → the relevant doc → the actual source before
   editing. The docs can lag, and the code wins.
 - Edit files with the IDE edit tools, not shell redirection or `sed`.
-- Don't run `fsweep` *without* `--dry-run` against real projects, including
+- Don't run `ftrim` *without* `--dry-run` against real projects, including
   this repo, unless the user asks. It deletes files.
 - Don't change public API signatures (anything exported from the barrel)
   without flagging it as a breaking change and bumping the major version.

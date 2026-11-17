@@ -2,7 +2,7 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/syntactic_entity.dart';
 import 'package:analyzer/dart/ast/token.dart';
 
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 
 /// Shared AST helpers used by [CodeScanner] and [FileCleaner] so that the
 /// scanner and the cleaner always agree on what a declaration is.
@@ -76,7 +76,7 @@ abstract final class DeclarationUtils {
       metadata.any((annotation) => annotation.name.name == name);
 
   /// Finds the AST node described by [item] in [unit], or `null`.
-  static AnnotatedNode? locate(CompilationUnit unit, SweepItem item) {
+  static AnnotatedNode? locate(CompilationUnit unit, TrimItem item) {
     for (final member in unit.declarations) {
       if (item.kind == DeclarationKind.method) {
         if (containerNameOf(member) != item.parentName) continue;

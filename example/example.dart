@@ -1,9 +1,9 @@
-// Programmatic use of flutter_sweeper.
+// Programmatic use of flutter_trim.
 //
 // Most people run the CLI instead:
 //
-//   dart pub global activate flutter_sweeper
-//   fsweep --dry-run
+//   dart pub global activate flutter_trim
+//   ftrim --dry-run
 //
 // This example runs the scanners as a library and prints a report without
 // deleting anything:
@@ -12,12 +12,12 @@
 
 import 'dart:io';
 
-import 'package:flutter_sweeper/flutter_sweeper.dart';
+import 'package:flutter_trim/flutter_trim.dart';
 
 void main(List<String> args) {
   final root = args.isEmpty ? '.' : args.first;
 
-  // Optional: honour the project's flutter_sweeper.yaml.
+  // Optional: honour the project's flutter_trim.yaml.
   final config = ConfigLoader.load(root);
   final context = ProjectContext.load(root, config: config);
 
@@ -32,7 +32,7 @@ void main(List<String> args) {
 
   final items = [...unusedAssets, ...unusedFiles, ...unusedCode];
   if (items.isEmpty) {
-    stdout.writeln('Nothing to sweep in ${context.root}.');
+    stdout.writeln('Nothing to trim in ${context.root}.');
     return;
   }
 

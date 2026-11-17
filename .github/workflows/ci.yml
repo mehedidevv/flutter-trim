@@ -38,7 +38,7 @@ jobs:
       - run: dart pub get
       - run: dart test
       - name: Smoke-test the executable
-        run: dart run bin/flutter_sweeper.dart --version
+        run: dart run bin/flutter_trim.dart --version
 
   lowest-dependencies:
     name: Analyze with lowest dependency versions

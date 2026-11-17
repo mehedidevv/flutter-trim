@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
@@ -5,30 +6,31 @@ import 'package:mason_logger/mason_logger.dart';
 import 'package:path/path.dart' as p;
 
 import '../cleaners/file_cleaner.dart';
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 import '../scanners/asset_scanner.dart';
 import '../scanners/code_scanner.dart';
 import '../scanners/file_scanner.dart';
 import '../scanners/project_context.dart';
 import '../utils/config_loader.dart';
-import '../utils/logger.dart';
 import '../version.dart';
 import 'interactive_prompt.dart';
+import 'reporter.dart';
+import 'ui.dart';
 
 /// Parses CLI arguments and orchestrates scanning, reporting and cleaning.
-class SweeperCommandRunner {
+class TrimCommandRunner {
   /// Creates a runner.
   ///
   /// Pass a [logger] to capture or silence output, and [interactive] to force
   /// (or disable) the interactive review instead of detecting a terminal.
-  SweeperCommandRunner({Logger? logger, bool? interactive})
+  TrimCommandRunner({Logger? logger, bool? interactive})
       : _logger = logger ?? Logger(),
         _interactiveOverride = interactive;
 
   final Logger _logger;
   final bool? _interactiveOverride;
 
-  /// The command-line options understood by `fsweep`.
+  /// The command-line options understood by `ftrim`.
   late final ArgParser parser = ArgParser(usageLineLength: 100)
     ..addOption(
       'path',
@@ -67,6 +69,16 @@ class SweeperCommandRunner {
       help: 'Also report unused methods inside used classes.',
     )
     ..addFlag(
+      'json',
+      negatable: false,
+      help: 'Print the findings as JSON (implies --dry-run).',
+    )
+    ..addFlag(
+      'fail-on-findings',
+      negatable: false,
+      help: 'Exit with code 1 when anything unused is found (for CI).',
+    )
+    ..addFlag(
       'verbose',
       abbr: 'v',
       negatable: false,
@@ -92,7 +104,7 @@ class SweeperCommandRunner {
       return ExitCodes.success;
     }
     if (results['version'] as bool) {
-      _logger.info('flutter_sweeper $packageVersion');
+      _logger.info('flutter_trim $packageVersion');
       return ExitCodes.success;
     }
     if (results.rest.isNotEmpty) {
@@ -107,8 +119,8 @@ class SweeperCommandRunner {
     if (results['verbose'] as bool) _logger.level = Level.verbose;
 
     try {
-      return await _sweep(results);
-    } on SweeperException catch (e) {
+      return await _trim(results);
+    } on TrimException catch (e) {
       _logger.err(e.message);
       return e.exitCode;
     } on Object catch (e, stackTrace) {
@@ -119,16 +131,16 @@ class SweeperCommandRunner {
     }
   }
 
-  Future<int> _sweep(ArgResults results) async {
+  Future<int> _trim(ArgResults results) async {
     final root = p.normalize(p.absolute(results['path'] as String));
     if (!Directory(root).existsSync()) {
-      throw SweeperException(
+      throw TrimException(
         'Directory not found: $root',
         exitCode: ExitCodes.noInput,
       );
     }
     if (!File(p.join(root, 'pubspec.yaml')).existsSync()) {
-      throw SweeperException(
+      throw TrimException(
         'No pubspec.yaml in $root. Use --path to point at a project root.',
         exitCode: ExitCodes.noInput,
       );
@@ -136,7 +148,9 @@ class SweeperCommandRunner {
 
     final assetsOnly = results['assets-only'] as bool;
     final codeOnly = results['code-only'] as bool;
-    final dryRun = results['dry-run'] as bool;
+    final json = results['json'] as bool;
+    final dryRun = json || (results['dry-run'] as bool);
+    final failOnFindings = results['fail-on-findings'] as bool;
 
     final fileConfig = ConfigLoader.load(root);
     final config = fileConfig.copyWith(
@@ -149,57 +163,97 @@ class SweeperCommandRunner {
           : fileConfig.scanMethods,
     );
 
-    final reporter = SweepReporter(_logger)
-      ..printHeader(root: root, dryRun: dryRun);
+    final scanAssets = !codeOnly && config.scanAssets;
+    final scanFiles = !assetsOnly && config.scanFiles;
+    final scanCode = !assetsOnly && config.scanCode;
 
-    final parsing = _logger.progress('Parsing Dart sources');
-    final ProjectContext context;
-    try {
-      context = ProjectContext.load(root, config: config);
-    } on Object {
-      parsing.fail('Could not read the project');
-      rethrow;
+    final reporter = TrimReporter(_logger);
+    if (!json) {
+      reporter.printHeader(
+        root: root,
+        dryRun: dryRun,
+        scope: [
+          if (scanAssets) 'Assets',
+          if (scanFiles) 'Dart files',
+          if (scanCode)
+            config.scanMethods ? 'Classes & methods' : 'Classes & functions',
+        ],
+      );
     }
-    parsing.complete('Parsed ${context.dartFiles.length} Dart files');
-    context.skippedFiles.forEach(
-      (path, error) => _logger.detail('Skipped $path: $error'),
-    );
 
-    final items = <SweepItem>[];
-    if (!codeOnly && config.scanAssets) {
-      items.addAll(_scan('assets', () => AssetScanner(context).scan()));
+    final context = _step(
+      json,
+      'Parsing Dart sources',
+      () => ProjectContext.load(root, config: config),
+      (context) => 'Parsed ${context.dartFiles.length} Dart files',
+    );
+    if (context.skippedFiles.isNotEmpty) {
+      context.skippedFiles.forEach(
+        (path, error) => _logger.detail('Skipped $path: $error'),
+      );
+      if (!json) {
+        _logger.warn(
+          '${context.skippedFiles.length} file(s) could not be read, so '
+          'their references are unknown. Run with -v for details.',
+        );
+      }
+    }
+
+    final items = <TrimItem>[];
+    if (scanAssets) {
+      items.addAll(
+        _step(
+          json,
+          'Scanning assets',
+          () => AssetScanner(context).scan(),
+          (found) => 'Assets: ${_count(found.length)}',
+        ),
+      );
     }
     var unusedFiles = <String>{};
-    if (!assetsOnly && config.scanFiles) {
-      final files = _scan('Dart files', () => FileScanner(context).scan());
+    if (scanFiles) {
+      final files = _step(
+        json,
+        'Following imports',
+        () => FileScanner(context).scan(),
+        (found) => 'Dart files: ${_count(found.length)}',
+      );
       unusedFiles = {for (final item in files) item.path};
       items.addAll(files);
     }
-    if (!assetsOnly && config.scanCode) {
+    if (scanCode) {
       items.addAll(
-        _scan(
-          'classes, functions & methods',
+        _step(
+          json,
+          'Scanning classes, functions & methods',
           () => CodeScanner(
             context,
             includeMethods: config.scanMethods,
             skipFiles: unusedFiles,
           ).scan(),
+          (found) => 'Classes, functions & methods: ${_count(found.length)}',
         ),
       );
     }
 
+    final findingsExit = failOnFindings && items.isNotEmpty
+        ? ExitCodes.failure
+        : ExitCodes.success;
+
+    if (json) {
+      _printJson(root, items);
+      return findingsExit;
+    }
     if (items.isEmpty) {
-      _logger
-        ..info('')
-        ..success('✨ Nothing to sweep, the project is already clean.');
+      reporter.printClean();
       return ExitCodes.success;
     }
 
     reporter.printReport(items);
 
     if (dryRun) {
-      _logger.info(paint(darkGray, 'Dry run finished. Nothing was deleted.'));
-      return ExitCodes.success;
+      reporter.printDryRunDone(items.length);
+      return findingsExit;
     }
 
     final interactive =
@@ -207,12 +261,11 @@ class SweeperCommandRunner {
     if (!interactive) {
       _logger.warn(
         'No interactive terminal detected, so only the report was shown. '
-        'Run fsweep in a terminal to review items one by one.',
+        'Run ftrim in a terminal to review items one by one.',
       );
-      return ExitCodes.success;
+      return findingsExit;
     }
 
-    _logger.info('');
     if (!_isInsideGitRepo(root)) {
       _logger.warn(
         'This project is not under git, so deletions cannot be undone.',
@@ -230,16 +283,44 @@ class SweeperCommandRunner {
     return stats.failed > 0 ? ExitCodes.failure : ExitCodes.success;
   }
 
-  List<SweepItem> _scan(String label, List<SweepItem> Function() scan) {
-    final progress = _logger.progress('Scanning $label');
+  static String _count(int n) => n == 0 ? 'none unused' : '$n unused';
+
+  /// Runs [action] behind a spinner (unless [quiet]) and reports [done].
+  T _step<T>(
+    bool quiet,
+    String label,
+    T Function() action,
+    String Function(T result) done,
+  ) {
+    if (quiet) return action();
+    final progress = _logger.progress(label);
     try {
-      final found = scan();
-      progress.complete('Scanned $label: ${found.length} unused');
-      return found;
+      final result = action();
+      progress.complete(done(result));
+      return result;
     } on Object {
-      progress.fail('Scanning $label failed');
+      progress.fail('$label failed');
       rethrow;
     }
+  }
+
+  void _printJson(String root, List<TrimItem> items) {
+    final byType = <String, int>{
+      for (final type in TrimItemType.values)
+        type.name: items.where((item) => item.type == type).length,
+    };
+    final report = {
+      'tool': 'flutter_trim',
+      'version': packageVersion,
+      'project': root,
+      'summary': {
+        'total': items.length,
+        'sizeBytes': items.fold<int>(0, (sum, item) => sum + item.sizeBytes),
+        ...byType,
+      },
+      'items': [for (final item in items) item.toJson()],
+    };
+    _logger.info(const JsonEncoder.withIndent('  ').convert(report));
   }
 
   static bool _isInsideGitRepo(String start) {
@@ -256,22 +337,29 @@ class SweeperCommandRunner {
   }
 
   void _printUsage() {
+    String heading(String text) => paint(styleBold, text);
+    String example(String command, String what) =>
+        '  ${paint(lightCyan, command.padRight(42))}${paint(darkGray, what)}';
+
     _logger.info('''
-${paint(styleBold, 'flutter_sweeper')} v$packageVersion
+${heading('flutter_trim')} ${paint(darkGray, 'v$packageVersion')}
 Find and remove unused assets, Dart files, classes, functions and methods in a
 Flutter project, one item at a time.
 
-${paint(styleBold, 'Usage:')} fsweep [options]
+${heading('Usage')}
+  ftrim [options]
 
-${paint(styleBold, 'Options:')}
-${parser.usage}
+${heading('Options')}
+${parser.usage.split('\n').map((line) => '  $line').join('\n')}
 
-${paint(styleBold, 'Examples:')}
-  fsweep                                Review the current project interactively
-  fsweep --dry-run                      Print a report only
-  fsweep -p ../my_app --assets-only     Only unused assets of another project
-  fsweep --code-only --no-methods       Files, classes and functions only
-  fsweep -e "lib/legacy/**" -e "assets/legal/**"
+${heading('Examples')}
+${example('ftrim', 'Review the current project interactively')}
+${example('ftrim --dry-run', 'Print a report only')}
+${example('ftrim -p ../my_app --assets-only', 'Only unused assets of another project')}
+${example('ftrim --code-only --no-methods', 'Files, classes and functions only')}
+${example('ftrim --json > report.json', 'Machine-readable report')}
+${example('ftrim -n --fail-on-findings', 'Fail a CI job when anything is unused')}
+${example('ftrim -e "lib/legacy/**"', 'Never report the legacy folder')}
 ''');
   }
 }

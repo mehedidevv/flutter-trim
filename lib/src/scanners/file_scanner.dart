@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:path/path.dart' as p;
 
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 import 'project_context.dart';
 
 /// Finds `.dart` files in `lib/` that cannot be reached from any entry point
@@ -17,7 +17,12 @@ import 'project_context.dart';
 ///   (`main.dart`, `main_dev.dart`, ...),
 /// * for packages without a `main`, every public library directly under
 ///   `lib/` (outside `lib/src/`), because other packages may import them,
-/// * files listed under `entry_points` in `flutter_sweeper.yaml`.
+/// * files listed under `entry_points` in `flutter_trim.yaml`.
+///
+/// URIs are decoded before they are resolved (`common%20widget/` is the
+/// folder `common widget/`), and a URI that differs from the file on disk
+/// only by letter case still counts, because macOS and Windows compile such
+/// imports.
 ///
 /// Generated files (`*.g.dart`, `*.freezed.dart`, ...) and `part of` files are
 /// never reported on their own; parts are deleted together with their library.
@@ -30,9 +35,9 @@ class FileScanner {
 
   /// Returns every unreachable library in `lib/`, with its part files as
   /// companions.
-  List<SweepItem> scan() {
+  List<TrimItem> scan() {
     final reachable = reachableFiles();
-    final items = <SweepItem>[];
+    final items = <TrimItem>[];
 
     for (final file in context.dartFiles) {
       if (!file.relativePath.startsWith('lib/')) continue;
@@ -40,19 +45,18 @@ class FileScanner {
       if (file.isPartOf || file.isIgnored) continue;
       if (!context.filter.canReport(file.relativePath)) continue;
 
-      final companions = [
+      final companions = <String>{
         for (final uri in _partUris(file.unit))
-          if (_resolve(uri, file.path) case final part?)
-            if (File(part).existsSync()) part,
-      ];
+          if (_resolveExisting(uri, file.path) case final part?) part,
+      }.toList();
       var size = File(file.path).lengthSync();
       for (final companion in companions) {
         size += File(companion).lengthSync();
       }
 
       items.add(
-        SweepItem(
-          type: SweepItemType.file,
+        TrimItem(
+          type: TrimItemType.file,
           path: file.path,
           relativePath: file.relativePath,
           name: p.posix.basename(file.relativePath),
@@ -79,12 +83,58 @@ class FileScanner {
       final current = context.fileAt(queue.removeFirst());
       if (current == null) continue;
       for (final uri in _referencedUris(current.unit)) {
-        final target = _resolve(uri, current.path);
-        if (target == null || context.fileAt(target) == null) continue;
-        if (visited.add(target)) queue.add(target);
+        final target = resolveUri(uri, current.path);
+        if (target == null) continue;
+        // Use the path of the file on disk, which may differ in letter case.
+        final file = context.fileAt(target);
+        if (file == null) continue;
+        if (visited.add(file.path)) queue.add(file.path);
       }
     }
     return visited;
+  }
+
+  /// Resolves an `import` / `export` / `part` [uri] written in [fromFile] to
+  /// an absolute path inside this package, or `null` for `dart:` URIs, other
+  /// packages and malformed URIs.
+  ///
+  /// Percent-encoded characters are decoded, so
+  /// `package:app/common%20widget/x.dart` is `lib/common widget/x.dart`.
+  String? resolveUri(String uri, String fromFile) {
+    final Uri parsed;
+    try {
+      parsed = Uri.parse(uri);
+    } on FormatException {
+      return null;
+    }
+
+    if (parsed.scheme == 'package') {
+      final segments = parsed.pathSegments;
+      if (segments.length < 2 || segments.first != context.packageName) {
+        return null;
+      }
+      return context.absolute('lib/${segments.skip(1).join('/')}');
+    }
+    // dart:, other schemes and absolute URLs are outside the package.
+    if (parsed.hasScheme || parsed.hasAuthority) return null;
+
+    // `pathSegments` are already decoded (`%20` -> space).
+    return p.normalize(
+      p.joinAll([
+        if (!parsed.path.startsWith('/')) p.dirname(fromFile),
+        ...parsed.pathSegments,
+      ]),
+    );
+  }
+
+  /// [resolveUri], limited to files that exist (matching letter case
+  /// leniently like [ProjectContext.fileAt]).
+  String? _resolveExisting(String uri, String fromFile) {
+    final target = resolveUri(uri, fromFile);
+    if (target == null) return null;
+    final parsed = context.fileAt(target);
+    if (parsed != null) return parsed.path;
+    return File(target).existsSync() ? target : null;
   }
 
   Set<String> _entryPoints() {
@@ -102,7 +152,8 @@ class FileScanner {
       }
     }
     for (final relative in context.config.entryPoints) {
-      entries.add(context.absolute(relative));
+      final file = context.fileAt(context.absolute(relative));
+      entries.add(file?.path ?? context.absolute(relative));
     }
     return entries;
   }
@@ -132,22 +183,5 @@ class FileScanner {
       final uri = directive.uri.stringValue;
       if (uri != null) yield uri;
     }
-  }
-
-  /// Resolves an import URI to an absolute path inside this package.
-  String? _resolve(String uri, String fromFile) {
-    if (uri.startsWith('package:')) {
-      final rest = uri.substring('package:'.length);
-      final slash = rest.indexOf('/');
-      if (slash < 0 || rest.substring(0, slash) != context.packageName) {
-        return null;
-      }
-      return context.absolute('lib/${rest.substring(slash + 1)}');
-    }
-    // dart:, other schemes and absolute URLs are outside the package.
-    if (uri.contains(':')) return null;
-    return p.normalize(
-      p.join(p.dirname(fromFile), p.joinAll(p.url.split(uri))),
-    );
   }
 }

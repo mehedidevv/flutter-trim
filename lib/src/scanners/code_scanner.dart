@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:analyzer/dart/ast/ast.dart';
 
-import '../models/sweep_item.dart';
+import '../models/trim_item.dart';
 import 'declaration_utils.dart';
 import 'project_context.dart';
 
@@ -67,7 +67,7 @@ class CodeScanner {
   };
 
   /// Returns every unused declaration, sorted by path and line.
-  List<SweepItem> scan() {
+  List<TrimItem> scan() {
     final usages = _indexUsages();
     final containers = <_Candidate>[];
     final topLevel = <_Candidate>[];
@@ -87,7 +87,7 @@ class CodeScanner {
     }
 
     final unusedContainers = <_Candidate>{};
-    final items = <SweepItem>[];
+    final items = <TrimItem>[];
     for (final candidate in topLevel) {
       if (isUsed(candidate)) continue;
       if (candidate.isContainer) unusedContainers.add(candidate);
@@ -189,7 +189,7 @@ class CodeScanner {
     return !_hasKeepMarker(file, node);
   }
 
-  /// `// flutter_sweeper:keep` on the line above (or in the doc comment of)
+  /// `// flutter_trim:keep` on the line above (or in the doc comment of)
   /// a declaration protects it.
   static bool _hasKeepMarker(ParsedDartFile file, Declaration node) {
     final content = file.content;
@@ -240,11 +240,11 @@ class _Candidate {
   bool contains(_Usage usage) =>
       usage.path == file.path && usage.offset >= start && usage.offset < end;
 
-  SweepItem toItem() {
+  TrimItem toItem() {
     final nameOffset = node.firstTokenAfterCommentAndMetadata.offset;
     final source = file.content.substring(start, end);
-    return SweepItem(
-      type: SweepItemType.declaration,
+    return TrimItem(
+      type: TrimItemType.declaration,
       path: file.path,
       relativePath: file.relativePath,
       name: name,

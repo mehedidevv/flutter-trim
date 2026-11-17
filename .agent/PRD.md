@@ -1,8 +1,8 @@
-# Product Requirements Document: flutter_sweeper
+# Product Requirements Document: flutter_trim
 
 | | |
 | --- | --- |
-| Product | flutter_sweeper (`fsweep`) |
+| Product | flutter_trim (`ftrim`), formerly flutter_sweeper |
 | Type | Dart command-line tool, published on pub.dev |
 | Version covered | 1.0.0 |
 | Status | Implemented (initial release); pre-publish |
@@ -74,7 +74,7 @@ without breaking the build.
   `.keep`), dotfiles, hidden folders and `.dart` files.
 - FR-1.6 Count an asset as used if any of the following appear in Dart
   sources, non-asset pubspec values, or root-level `*.yaml`/`*.yml` configs
-  (except `pubspec.yaml`, `pubspec.lock`, `flutter_sweeper.yaml`):
+  (except `pubspec.yaml`, `pubspec.lock`, `flutter_trim.yaml`):
   - its full path,
   - its base path (variant folder removed),
   - its file name (with a boundary check),
@@ -91,7 +91,10 @@ without breaking the build.
   - `lib/` files that declare top-level `main`,
   - if no `main` exists (a package), every public library outside `lib/src/`,
   - `entry_points` from the config.
-- FR-2.3 Resolve `package:<self>/…` and relative URIs only.
+- FR-2.3 Resolve `package:<self>/…` and relative URIs only. URIs are
+  percent-decoded (`%20` → space), and when no file matches exactly, a file
+  whose path differs only by letter case is used (macOS/Windows compile such
+  imports).
 - FR-2.4 Report only `lib/` files that cannot be reached. Never report
   `part of` files or ignored/generated/excluded files.
 - FR-2.5 Attach `part` files as *companions*, deleted together with the
@@ -115,7 +118,7 @@ without breaking the build.
   - are named `main`,
   - are listed in `keep`,
   - are annotated `@pragma` or `@protected`,
-  - have `// flutter_sweeper:keep` on the line above or in their doc comment.
+  - have `// flutter_trim:keep` on the line above or in their doc comment.
 - FR-3.6 Don't report methods of a container that is already reported unused.
 - FR-3.7 Don't report declarations in files that FR-2 already reported.
 - FR-3.8 Sort findings by path, then line.
@@ -155,15 +158,18 @@ without breaking the build.
 | `-v, --verbose` | Diagnostic output (skipped files, stack traces). |
 | `--version`, `-h, --help` | |
 
-Two executables: `fsweep` and `flutter_sweeper`.
+| `--json` | Print findings as JSON; implies dry run. |
+| `--fail-on-findings` | Exit 1 when anything unused is found. |
 
-### FR-7 Configuration (`flutter_sweeper.yaml`)
+Two executables: `ftrim` and `flutter_trim`.
+
+### FR-7 Configuration (`flutter_trim.yaml`)
 Keys: `exclude`, `entry_points`, `keep`, `asset_directories`,
 `scan.{assets,files,code,methods}`. Settings may also sit under a top-level
-`flutter_sweeper:` key. A single string is accepted where a list is
+`flutter_trim:` key. A single string is accepted where a list is
 expected. Invalid YAML or a non-map root gives exit code 78.
 
-Inline markers: `// flutter_sweeper:keep`, `// flutter_sweeper:ignore_file`.
+Inline markers: `// flutter_trim:keep`, `// flutter_trim:ignore_file`.
 
 ### FR-8 Exit codes (sysexits)
 | Code | Meaning |
@@ -177,9 +183,9 @@ Inline markers: `// flutter_sweeper:keep`, `// flutter_sweeper:ignore_file`.
 
 ### FR-9 Programmatic API
 Export `ProjectContext`, `AssetScanner`, `FileScanner`, `CodeScanner`,
-`FileCleaner`, `SweepItem` and related types, `SweeperConfig`,
-`ConfigLoader`, `PathFilter`, `SweepReporter`, `SweepStats`, `formatBytes`,
-`SweeperCommandRunner`, `InteractivePrompt`, `packageVersion`, and the marker
+`FileCleaner`, `TrimItem` and related types, `TrimConfig`,
+`ConfigLoader`, `PathFilter`, `TrimReporter`, `TrimStats`, `formatBytes`,
+`TrimCommandRunner`, `InteractivePrompt`, `packageVersion`, and the marker
 constants.
 
 ## 6. Non-functional requirements

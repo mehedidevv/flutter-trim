@@ -20,10 +20,10 @@ labels: bug
 **Command**
 
 ```sh
-fsweep ...
+ftrim ...
 ```
 
 **Environment**
-- `fsweep --version`:
+- `ftrim --version`:
 - `dart --version`:
 - OS:

@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for flutter_sweeper
+about: Suggest an idea for flutter_trim
 labels: enhancement
 ---
 

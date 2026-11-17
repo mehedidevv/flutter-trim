@@ -1,11 +1,10 @@
-# flutter_sweeper 🧹
+# flutter_trim ✂️
 
-[![pub package](https://img.shields.io/pub/v/flutter_sweeper.svg)](https://pub.dev/packages/flutter_sweeper)
-[![pub points](https://img.shields.io/pub/points/flutter_sweeper)](https://pub.dev/packages/flutter_sweeper/score)
-[![CI](https://github.com/mehedidevv/flutter_sweeper/actions/workflows/ci.yml/badge.svg)](https://github.com/mehedidevv/flutter_sweeper/actions/workflows/ci.yml)
+[![pub package](https://img.shields.io/pub/v/flutter_trim.svg)](https://pub.dev/packages/flutter_trim)
+[![pub points](https://img.shields.io/pub/points/flutter_trim)](https://pub.dev/packages/flutter_trim/score)
+[![CI](https://github.com/mehedidevv/flutter-trim/actions/workflows/ci.yml/badge.svg)](https://github.com/mehedidevv/flutter-trim/actions/workflows/ci.yml)
 [![Dart SDK](https://img.shields.io/badge/dart-%3E%3D3.0.0-blue.svg)](https://dart.dev)
 [![License: MIT](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
-[![style: lints](https://img.shields.io/badge/style-lints-4BC0F5.svg)](https://pub.dev/packages/lints)
 
 An interactive command-line tool that finds **unused assets**, **unreferenced
 Dart files** and **unused classes, functions and methods** in a Flutter
@@ -13,30 +12,35 @@ project, then walks you through them **one by one** so you can **Keep** or
 **Delete** each one.
 
 ```text
-🧹 flutter_sweeper v1.0.0
-Project: /Users/me/code/shop_app
-
-✓ Parsed 214 Dart files
-✓ Scanned assets: 7 unused
-✓ Scanned Dart files: 3 unused
-✓ Scanned classes, functions & methods: 11 unused
-
-── Class · 12/21 ──────────────────────────────
-  Name     PromoBannerV1
-  Location lib/widgets/promo_banner_v1.dart:14
-  Size     2.3 KB
-  Reason   No references outside its own declaration
-     14 │ class PromoBannerV1 extends StatelessWidget {
-     15 │   const PromoBannerV1({super.key, required this.offer});
-? What should flutter_sweeper do?
+  ╭─ Class ────────────────────────────────────────────────── 12 / 21 ─╮
+  │ PromoBannerV1                                                      │
+  │ lib/widgets/promo_banner_v1.dart:14  ·  2.3 KB                     │
+  │ No references outside its own declaration                          │
+  ├────────────────────────────────────────────────────────────────────┤
+  │    14 │ class PromoBannerV1 extends StatelessWidget {              │
+  │    15 │   const PromoBannerV1({super.key, required this.offer});   │
+  │    16 │                                                            │
+  │    17 │   final Offer offer;                                       │
+  ╰────────────────────────────────────────────────────────────────────╯
+  ▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱ 4 deleted · 7 kept
+? What do you want to do?
 ❯ Keep
   Delete
   Delete all remaining
-  Skip all / Quit
+  Quit and keep the rest
 ```
+
+> Formerly published as `flutter_sweeper`. The package was renamed and its
+> import resolution rewritten for large projects; see the
+> [changelog](CHANGELOG.md).
 
 ## Features
 
+- **Built for large apps.** Tested on real Flutter apps with 400–600 Dart
+  files. Import paths with spaces (`common%20widget/`) and imports whose
+  letter case differs from the file name (`gatewayController.dart` for
+  `gateWayController.dart`, which macOS and Windows accept) are resolved
+  correctly, so used files are never reported.
 - **Unused assets.** Reads `flutter: assets:` from `pubspec.yaml`, expands
   directory entries the way Flutter does (including `2.0x/` and `3.0x/`
   variants), also finds files in `assets/` that were never declared, and
@@ -53,21 +57,23 @@ Project: /Users/me/code/shop_app
 - **Safe removal.** Declarations are cut out together with their doc comments
   and annotations, and the file is parsed again before anything is written.
   If the edit would add a syntax error, the file is left untouched.
-- **You decide.** You choose Keep / Delete / Delete all remaining /
-  Skip all for each item. `--dry-run` only prints the report.
+- **You decide.** Keep / Delete / Delete all remaining / Quit for each item,
+  with a code preview. `--dry-run` only prints the report.
+- **CI ready.** `--json` for machine-readable output and
+  `--fail-on-findings` to fail a build when something is unused.
 
 ## Installation
 
 ```sh
-dart pub global activate flutter_sweeper
+dart pub global activate flutter_trim
 ```
 
 Make sure the pub cache `bin` folder is on your `PATH`, then use either
 executable:
 
 ```sh
-fsweep --help
-flutter_sweeper --help
+ftrim --help
+flutter_trim --help
 ```
 
 ## Usage
@@ -75,13 +81,15 @@ flutter_sweeper --help
 Run it from the root of a Flutter project (the folder with `pubspec.yaml`):
 
 ```sh
-fsweep                                 # interactive review
-fsweep --dry-run                       # report only, nothing is deleted
-fsweep --assets-only                   # only assets
-fsweep --code-only                     # only Dart files and declarations
-fsweep --code-only --no-methods        # skip method-level findings
-fsweep -p ../other_app                 # scan another project
-fsweep -e "lib/legacy/**" -e "assets/legal/**"
+ftrim                                  # interactive review
+ftrim --dry-run                        # report only, nothing is deleted
+ftrim --assets-only                    # only assets
+ftrim --code-only                      # only Dart files and declarations
+ftrim --code-only --no-methods         # skip method-level findings
+ftrim -p ../other_app                  # scan another project
+ftrim -e "lib/legacy/**" -e "assets/legal/**"
+ftrim --json > report.json             # machine-readable report
+ftrim -n --fail-on-findings            # exit code 1 if anything is unused
 ```
 
 | Option | Abbr | Description |
@@ -92,6 +100,8 @@ fsweep -e "lib/legacy/**" -e "assets/legal/**"
 | `--dry-run` | `-n` | Print the report and exit without deleting. |
 | `--exclude <glob>` | `-e` | Never report matching paths. Repeatable. |
 | `--[no-]methods` | | Report unused methods inside used classes (default on). |
+| `--json` | | Print the findings as JSON (implies `--dry-run`). |
+| `--fail-on-findings` | | Exit with code 1 when anything unused is found. |
 | `--verbose` | `-v` | Diagnostic output. |
 | `--version` | | Print the version. |
 | `--help` | `-h` | Show usage. |
@@ -103,14 +113,30 @@ fsweep -e "lib/legacy/**" -e "assets/legal/**"
 | **Keep** | Leave the item and move on to the next one. |
 | **Delete** | Delete the file or remove the declaration now. |
 | **Delete all remaining** | After a confirmation, delete this and every remaining item. |
-| **Skip all / Quit** | Stop and leave everything that is left. |
+| **Quit and keep the rest** | Stop and leave everything that is left. |
 
-When the terminal is not interactive (CI, piped output), flutter_sweeper only
+When the terminal is not interactive (CI, piped output), flutter_trim only
 prints the report.
+
+### JSON output
+
+```json
+{
+  "tool": "flutter_trim",
+  "version": "1.0.0",
+  "project": "/path/to/app",
+  "summary": { "total": 3, "sizeBytes": 4210, "asset": 1, "file": 1, "declaration": 1 },
+  "items": [
+    { "type": "declaration", "kind": "method", "name": "voteBlog", "parent": "AppUrl",
+      "path": "lib/core/network/api_url.dart", "line": 188, "sizeBytes": 83,
+      "reason": "Method is never called or torn off anywhere in the project" }
+  ]
+}
+```
 
 ## Configuration
 
-Create an optional `flutter_sweeper.yaml` next to `pubspec.yaml`:
+Create an optional `flutter_trim.yaml` next to `pubspec.yaml`:
 
 ```yaml
 # Paths that are never reported (globs, relative to the project root).
@@ -146,7 +172,7 @@ CLI `--exclude` globs are added to the ones in the config file, and
 ### Protecting code inline
 
 ```dart
-// flutter_sweeper:keep
+// flutter_trim:keep
 void calledFromNativeSide() {}
 
 @pragma('vm:entry-point') // Also protected automatically.
@@ -155,21 +181,24 @@ void backgroundHandler() {}
 
 Declarations annotated with `@protected` are never reported either.
 
-Put `// flutter_sweeper:ignore_file` anywhere in a file to exclude all of its
+Put `// flutter_trim:ignore_file` anywhere in a file to exclude all of its
 declarations, and the file itself, from the report.
 
 ## How it works
 
 1. **Parse once.** Every `.dart` file in `lib/`, `test/`, `bin/`, `tool/`,
    `integration_test/` and `test_driver/` is parsed with
-   `package:analyzer`.
+   `package:analyzer`. Files with invalid UTF-8 are still read, so their
+   references are never lost.
 2. **Assets.** Each candidate counts as used when its full path, its file name
    or its flutter_gen getter appears in a Dart source or a config value.
 3. **Files.** A breadth-first walk follows `import`/`export`/`part` (including
-   conditional imports) from the entry points. Packages without a `main`
-   treat every public library directly under `lib/` as an entry point.
+   conditional imports) from the entry points. URIs are percent-decoded and
+   matched to files case-insensitively when there is no exact match. Packages
+   without a `main` treat every public library directly under `lib/` as an
+   entry point.
 4. **Declarations.** For each class, mixin, enum, typedef, top-level function
-   and method in reportable `lib/` files, flutter_sweeper looks for the name
+   and method in reportable `lib/` files, flutter_trim looks for the name
    among the identifier tokens of *all* project files, ignoring occurrences
    inside the declaration itself.
 
@@ -179,7 +208,7 @@ Generated files (`*.g.dart`, `*.freezed.dart`, `*.gr.dart`, `*.config.dart`,
 
 ## Limitations
 
-flutter_sweeper is conservative: when in doubt it treats something as used.
+flutter_trim is conservative: when in doubt it treats something as used.
 Keep these cases in mind:
 
 - **Name-based matching.** Two declarations with the same name keep each other
@@ -193,29 +222,29 @@ Keep these cases in mind:
 - **Code used only by tests** counts as used.
 - **Reflection, `dart:mirrors`, platform channels and native callbacks** are
   invisible to static analysis. Protect them with `@pragma('vm:entry-point')`,
-  `// flutter_sweeper:keep` or the `keep:` list.
+  `// flutter_trim:keep` or the `keep:` list.
 - **Published packages.** Public API under `lib/` may be used by other
-  packages. Review findings carefully, or exclude `lib/` and only sweep
+  packages. Review findings carefully, or exclude `lib/` and only trim
   `lib/src/`.
 
 ## Recommended workflow
 
 ```sh
 git status                 # start from a clean working tree
-fsweep --dry-run           # look at the report first
-fsweep                     # review and delete
+ftrim --dry-run            # look at the report first
+ftrim                      # review and delete
 dart fix --apply           # remove imports that became unused
 flutter analyze && flutter test
 git diff                   # review, then commit
 ```
 
-flutter_sweeper warns you before it deletes anything in a project that is not
+flutter_trim warns you before it deletes anything in a project that is not
 under git.
 
 ## Programmatic use
 
 ```dart
-import 'package:flutter_sweeper/flutter_sweeper.dart';
+import 'package:flutter_trim/flutter_trim.dart';
 
 void main() {
   final context = ProjectContext.load('path/to/app');

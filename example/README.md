@@ -1,17 +1,18 @@
-# flutter_sweeper examples
+# flutter_trim examples
 
 ```sh
 # Install once
-dart pub global activate flutter_sweeper
+dart pub global activate flutter_trim
 
 # From the root of a Flutter app
-fsweep --dry-run          # see what is unused
-fsweep                    # review items one by one
-fsweep --assets-only      # assets only
-fsweep -e "lib/legacy/**" # never report the legacy folder
+ftrim --dry-run           # see what is unused
+ftrim                     # review items one by one
+ftrim --assets-only       # assets only
+ftrim -e "lib/legacy/**"  # never report the legacy folder
+ftrim --json > report.json
 ```
 
-Optional `flutter_sweeper.yaml`:
+Optional `flutter_trim.yaml`:
 
 ```yaml
 exclude:
@@ -21,3 +22,5 @@ keep:
 scan:
   methods: false
 ```
+
+For programmatic use, see [example.dart](example.dart).

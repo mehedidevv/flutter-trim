@@ -1,5 +1,5 @@
 /// The category of a finding produced by one of the scanners.
-enum SweepItemType {
+enum TrimItemType {
   /// A file under an asset folder or declared in `pubspec.yaml`.
   asset('Asset'),
 
@@ -9,13 +9,13 @@ enum SweepItemType {
   /// A class, mixin, enum, typedef, top-level function or method.
   declaration('Declaration');
 
-  const SweepItemType(this.label);
+  const TrimItemType(this.label);
 
   /// Human readable label.
   final String label;
 }
 
-/// The kind of Dart declaration for [SweepItemType.declaration] items.
+/// The kind of Dart declaration for [TrimItemType.declaration] items.
 enum DeclarationKind {
   /// A `class` declaration or a `class X = Y with Z;` alias.
   classDeclaration('Class'),
@@ -42,9 +42,9 @@ enum DeclarationKind {
 }
 
 /// A single unused thing the user can keep or delete.
-class SweepItem {
+class TrimItem {
   /// Creates a finding. Scanners build these; you rarely need to.
-  const SweepItem({
+  const TrimItem({
     required this.type,
     required this.path,
     required this.relativePath,
@@ -58,7 +58,7 @@ class SweepItem {
   });
 
   /// What sort of finding this is.
-  final SweepItemType type;
+  final TrimItemType type;
 
   /// Absolute path of the file that holds (or is) the item.
   final String path;
@@ -100,7 +100,7 @@ class SweepItem {
 
   /// Whether this item is a declaration inside a Dart file rather than a
   /// whole file.
-  bool get isDeclaration => type == SweepItemType.declaration;
+  bool get isDeclaration => type == TrimItemType.declaration;
 
   /// A JSON-encodable representation, for machine-readable reports.
   Map<String, Object?> toJson() => {
@@ -112,6 +112,7 @@ class SweepItem {
         'line': lineNumber,
         'sizeBytes': sizeBytes,
         'reason': reason,
+        if (companionPaths.isNotEmpty) 'companions': companionPaths.length,
       };
 
   @override
@@ -123,7 +124,7 @@ abstract final class ExitCodes {
   /// Everything went fine (including dry runs and a clean project).
   static const int success = 0;
 
-  /// At least one deletion failed.
+  /// At least one deletion failed, or `--fail-on-findings` found something.
   static const int failure = 1;
 
   /// The command line was invalid.
@@ -135,14 +136,14 @@ abstract final class ExitCodes {
   /// An unexpected internal error occurred.
   static const int software = 70;
 
-  /// `flutter_sweeper.yaml` is invalid.
+  /// `flutter_trim.yaml` is invalid.
   static const int config = 78;
 }
 
 /// A recoverable, user-facing error.
-class SweeperException implements Exception {
+class TrimException implements Exception {
   /// Creates an error that ends the run with [exitCode].
-  const SweeperException(this.message, {this.exitCode = ExitCodes.software});
+  const TrimException(this.message, {this.exitCode = ExitCodes.software});
 
   /// Message shown to the user.
   final String message;
@@ -151,5 +152,5 @@ class SweeperException implements Exception {
   final int exitCode;
 
   @override
-  String toString() => 'SweeperException: $message';
+  String toString() => 'TrimException: $message';
 }
