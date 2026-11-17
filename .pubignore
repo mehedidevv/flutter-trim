@@ -1,0 +1,21 @@
+# A .pubignore replaces .gitignore for `dart pub publish`, so everything that
+# must not be uploaded is listed here.
+
+# Build / tool output
+.dart_tool/
+build/
+coverage/
+.packages
+pubspec.lock
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Repository-only material (internal docs, CI, templates)
+.agent/
+.github/
+
+# OS junk
+.DS_Store

@@ -1,0 +1,19 @@
+# Publishes to pub.dev when a version tag (v1.2.3) is pushed.
+#
+# One-time setup, after the first manual `dart pub publish`:
+#   pub.dev → flutter_sweeper → Admin → Automated publishing →
+#   Enable publishing from GitHub Actions, repository
+#   mehedidevv/flutter_sweeper, tag pattern `v{{version}}`.
+# The package then shows a "Published by GitHub Actions" verified badge.
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  publish:
+    permissions:
+      id-token: write # Required for OIDC authentication with pub.dev.
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
