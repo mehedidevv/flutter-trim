@@ -15,6 +15,7 @@ import '../scanners/project_context.dart';
 import '../utils/config_loader.dart';
 import '../version.dart';
 import 'interactive_prompt.dart';
+import 'links.dart';
 import 'reporter.dart';
 import 'ui.dart';
 
@@ -68,6 +69,19 @@ class TrimCommandRunner {
       'methods',
       defaultsTo: true,
       help: 'Also report unused methods inside used classes.',
+    )
+    ..addFlag(
+      'variables',
+      defaultsTo: true,
+      help: 'Also report unused top-level variables and class fields.',
+    )
+    ..addOption(
+      'editor',
+      valueHelp: 'name',
+      allowed: ['auto', 'vscode', 'cursor', 'idea', 'file', 'none'],
+      defaultsTo: 'auto',
+      help: 'Where clickable paths open. "auto" picks the editor whose '
+          'terminal ftrim runs in; "none" turns links off.',
     )
     ..addFlag(
       'json',
@@ -175,13 +189,20 @@ class TrimCommandRunner {
       scanMethods: results.wasParsed('methods')
           ? results['methods'] as bool
           : fileConfig.scanMethods,
+      scanVariables: results.wasParsed('variables')
+          ? results['variables'] as bool
+          : fileConfig.scanVariables,
+    );
+    final linker = Linker(
+      editor: results['editor'] as String,
+      enabled: !json && _logger.level != Level.quiet,
     );
 
     final scanAssets = !codeOnly && config.scanAssets;
     final scanFiles = !assetsOnly && config.scanFiles;
     final scanCode = !assetsOnly && config.scanCode;
 
-    final reporter = TrimReporter(_logger);
+    final reporter = TrimReporter(_logger, linker: linker);
     if (!json) {
       reporter.printHeader(
         root: root,
@@ -190,7 +211,11 @@ class TrimCommandRunner {
           if (scanAssets) 'Assets',
           if (scanFiles) 'Dart files',
           if (scanCode)
-            config.scanMethods ? 'Classes & methods' : 'Classes & functions',
+            [
+              'Classes & functions',
+              if (config.scanMethods) 'methods',
+              if (config.scanVariables) 'variables',
+            ].join(', '),
         ],
       );
     }
@@ -239,13 +264,14 @@ class TrimCommandRunner {
       items.addAll(
         _step(
           json,
-          'Scanning classes, functions & methods',
+          'Scanning classes, functions, methods & variables',
           () => CodeScanner(
             context,
             includeMethods: config.scanMethods,
+            includeVariables: config.scanVariables,
             skipFiles: unusedFiles,
           ).scan(),
-          (found) => 'Classes, functions & methods: ${_count(found.length)}',
+          (found) => 'Declarations: ${_count(found.length)}',
         ),
       );
     }
@@ -293,6 +319,7 @@ class TrimCommandRunner {
 
     final stats = InteractivePrompt(
       logger: _logger,
+      linker: linker,
       cleaner: FileCleaner(backup: backup ? BackupStore.start(root) : null),
     ).run(items);
     reporter.printSummary(stats);
@@ -406,6 +433,7 @@ ${example('ftrim --json > report.json', 'Machine-readable report')}
 ${example('ftrim -n --fail-on-findings', 'Fail a CI job when anything is unused')}
 ${example('ftrim -e "lib/legacy/**"', 'Never report the legacy folder')}
 ${example('ftrim --restore', 'Undo the deletions of the last session')}
+${example('ftrim --editor vscode', 'Paths open in VS Code when clicked')}
 ''');
   }
 }

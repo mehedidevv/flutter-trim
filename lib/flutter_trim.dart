@@ -15,6 +15,7 @@ export 'src/cleaners/backup_store.dart'
 export 'src/cleaners/file_cleaner.dart' show CleanResult, FileCleaner;
 export 'src/cli/command_runner.dart' show TrimCommandRunner;
 export 'src/cli/interactive_prompt.dart' show InteractivePrompt, PromptDecision;
+export 'src/cli/links.dart' show Linker;
 export 'src/cli/reporter.dart' show TrimReporter, TrimStats;
 export 'src/cli/ui.dart' show formatBytes;
 export 'src/models/trim_item.dart';

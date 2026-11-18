@@ -7,7 +7,8 @@ import 'declaration_utils.dart';
 import 'project_context.dart';
 
 /// Uses the Dart `analyzer` AST to find classes, mixins, enums, typedefs,
-/// top-level functions and methods that are never referenced.
+/// top-level functions, methods, top-level variables and fields that are
+/// never referenced.
 ///
 /// Declarations are collected from the AST of every reportable file in
 /// `lib/`. References are the identifier tokens of *every* Dart file in the
@@ -24,6 +25,7 @@ class CodeScanner {
   CodeScanner(
     this.context, {
     this.includeMethods = true,
+    this.includeVariables = true,
     this.skipFiles = const {},
   });
 
@@ -32,6 +34,9 @@ class CodeScanner {
 
   /// Whether methods inside used classes are reported as well.
   final bool includeMethods;
+
+  /// Whether top-level variables and class fields are reported as well.
+  final bool includeVariables;
 
   /// Absolute paths whose declarations are not reported (for example files
   /// already reported as unused by [FileScanner]).
@@ -94,7 +99,7 @@ class CodeScanner {
       items.add(candidate.toItem());
     }
     for (final method in methods) {
-      // Methods of an unused class disappear with the class.
+      // Methods and fields of an unused class disappear with the class.
       if (unusedContainers.contains(method.parent)) continue;
       if (!isUsed(method)) items.add(method.toItem());
     }
@@ -129,7 +134,11 @@ class CodeScanner {
       final name = DeclarationUtils.nameOf(member);
       _Candidate? container;
 
-      if (kind != null && name != null && _isReportable(file, member, name)) {
+      final wanted = kind != DeclarationKind.variable || includeVariables;
+      if (kind != null &&
+          name != null &&
+          wanted &&
+          _isReportable(file, member, name)) {
         final candidate = _Candidate(
           file: file,
           node: member,
@@ -144,11 +153,35 @@ class CodeScanner {
         }
       }
 
-      if (!includeMethods) continue;
       final containerName = DeclarationUtils.containerNameOf(member);
       if (containerName == null) continue;
       if (DeclarationUtils.hasAnnotation(member.metadata, 'pragma')) continue;
 
+      if (includeVariables) {
+        final fields =
+            DeclarationUtils.membersOf(member).whereType<FieldDeclaration>();
+        for (final field in fields) {
+          final fieldName = DeclarationUtils.fieldNameOf(field);
+          if (fieldName == null ||
+              _hasModifier(field, const {'abstract', 'external'}) ||
+              DeclarationUtils.hasAnnotation(field.metadata, 'override') ||
+              !_isReportable(file, field, fieldName)) {
+            continue;
+          }
+          methods.add(
+            _Candidate(
+              file: file,
+              node: field,
+              name: fieldName,
+              kind: DeclarationKind.field,
+              parentName: containerName,
+              parent: container,
+            ),
+          );
+        }
+      }
+
+      if (!includeMethods) continue;
       final memberMethods =
           DeclarationUtils.membersOf(member).whereType<MethodDeclaration>();
       for (final method in memberMethods) {
@@ -177,6 +210,17 @@ class CodeScanner {
         );
       }
     }
+  }
+
+  /// Whether a modifier in [keywords] appears before the field's type/name.
+  static bool _hasModifier(FieldDeclaration field, Set<String> keywords) {
+    var token = field.firstTokenAfterCommentAndMetadata;
+    final stop = field.fields.variables.first.name;
+    while (token != stop && !token.isEof) {
+      if (keywords.contains(token.lexeme)) return true;
+      token = token.next!;
+    }
+    return false;
   }
 
   bool _isReportable(ParsedDartFile file, Declaration node, String name) {
@@ -252,9 +296,15 @@ class _Candidate {
       parentName: parentName,
       lineNumber: file.lineOf(nameOffset),
       sizeBytes: utf8.encode(source).length,
-      reason: kind == DeclarationKind.method
-          ? 'Method is never called or torn off anywhere in the project'
-          : 'No references outside its own declaration',
+      reason: switch (kind) {
+        DeclarationKind.method =>
+          'Method is never called or torn off anywhere in the project',
+        DeclarationKind.field =>
+          'Field is never read, written or initialized anywhere',
+        DeclarationKind.variable =>
+          'Variable is never read or written anywhere in the project',
+        _ => 'No references outside its own declaration',
+      },
     );
   }
 }

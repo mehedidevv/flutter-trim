@@ -2,6 +2,7 @@ import 'package:mason_logger/mason_logger.dart';
 
 import '../models/trim_item.dart';
 import '../version.dart';
+import 'links.dart';
 import 'ui.dart';
 
 /// Counters collected during an interactive session.
@@ -41,13 +42,18 @@ class TrimStats {
 /// session summary.
 class TrimReporter {
   /// Creates a reporter that writes to [logger], laid out by [ui].
-  TrimReporter(this.logger, {Ui? ui}) : ui = ui ?? Ui();
+  TrimReporter(this.logger, {Ui? ui, Linker? linker})
+      : ui = ui ?? Ui(),
+        linker = linker ?? Linker.plain();
 
   /// Destination of all output.
   final Logger logger;
 
   /// Box and table renderer.
   final Ui ui;
+
+  /// Makes locations clickable.
+  final Linker linker;
 
   void _lines(Iterable<String> lines) => lines.forEach(logger.info);
 
@@ -244,17 +250,20 @@ class TrimReporter {
   }
 
   /// Files and assets already show their file name, so the location column
-  /// shows the folder; declarations show `path:line`.
-  static String _location(TrimItem item) {
-    if (item.isDeclaration) return item.location;
-    final slash = item.relativePath.lastIndexOf('/');
-    return slash < 0 ? './' : item.relativePath.substring(0, slash + 1);
+  /// shows the folder; declarations show `path:line`. Both are clickable.
+  String _location(TrimItem item) {
+    if (item.isDeclaration) return linker.location(item);
+    final path = linker.displayPath(item.path);
+    final slash = path.lastIndexOf(RegExp(r'[/\\]'));
+    final folder = slash < 0 ? './' : path.substring(0, slash + 1);
+    return linker.wrap(folder, item.path);
   }
 
   /// Heading for a category of findings.
   static String title(TrimItemType type) => switch (type) {
         TrimItemType.asset => 'Unused assets',
         TrimItemType.file => 'Unreferenced Dart files',
-        TrimItemType.declaration => 'Unused classes, functions & methods',
+        TrimItemType.declaration =>
+          'Unused classes, functions, methods & variables',
       };
 }

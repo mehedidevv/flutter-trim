@@ -58,7 +58,10 @@ documented in the README.
 
 ## Roadmap
 Done in flutter_trim 1.0.0: `--json`, `--fail-on-findings`.
-Done (Unreleased): backups, **Undo last delete**, `--restore`, `--[no-]backup`.
+Done in 1.2.0: unused top-level variables and fields, clickable paths
+(`--editor`). Local variables are not reported (`dart analyze` already flags
+`unused_local_variable`, and removing an initializer can drop side effects).
+Done in 1.1.0: backups, **Undo last delete**, `--restore`, `--[no-]backup`.
 
 Note: backups are never cleaned up automatically; users delete
 `.flutter_trim/` themselves.

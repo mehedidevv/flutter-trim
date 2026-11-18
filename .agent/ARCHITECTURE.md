@@ -127,7 +127,18 @@ owned by the CLI layer; layout primitives live in `cli/ui.dart`.
   `[node.offset, node.end)` in the declaring file. This makes self
   references (constructors, recursion, static factories) not count.
 - Methods whose parent container is unused are dropped, because they go
-  away with the parent.
+  away with the parent. The same applies to fields.
+- Variables (since 1.2): `TopLevelVariableDeclaration` and
+  `FieldDeclaration` with exactly **one** variable
+  (`DeclarationUtils.singleVariableName`), so removal always takes out a
+  whole statement. Fields skip `@override`, `abstract`, `external`
+  (`_hasModifier` walks tokens; no version-specific keyword getters).
+  Gated by `includeVariables` / `scan.variables` / `--[no-]variables`.
+- Links (since 1.2): `cli/links.dart` `Linker` renders cwd-relative
+  `path:line`. In VS Code/Cursor (`TERM_PROGRAM=vscode`) and JetBrains
+  (`TERMINAL_EMULATOR=JetBrains-JediTerm`) terminals it leaves plain text
+  (they link it with the line); otherwise it wraps an OSC 8 hyperlink.
+  `visibleLength` strips OSC 8 markers.
 - Protection layers, in order: `main`, the `keep` list, `@pragma` or
   `@protected` metadata, a `// flutter_trim:keep` marker in the region
   from the line above the node through its first non-comment token. Methods

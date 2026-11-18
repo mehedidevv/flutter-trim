@@ -4,6 +4,7 @@ import 'package:mason_logger/mason_logger.dart';
 
 import '../cleaners/file_cleaner.dart';
 import '../models/trim_item.dart';
+import 'links.dart';
 import 'reporter.dart';
 import 'ui.dart';
 
@@ -34,8 +35,16 @@ enum PromptDecision {
 /// Walks the user through findings one by one with an arrow-key menu.
 class InteractivePrompt {
   /// Creates a prompt that talks through [logger] and deletes with [cleaner].
-  InteractivePrompt({required this.logger, required this.cleaner, Ui? ui})
-      : ui = ui ?? Ui();
+  InteractivePrompt({
+    required this.logger,
+    required this.cleaner,
+    Ui? ui,
+    Linker? linker,
+  })  : ui = ui ?? Ui(),
+        linker = linker ?? Linker.plain();
+
+  /// Makes the item location clickable.
+  final Linker linker;
 
   /// Terminal used for output, menus and confirmations.
   final Logger logger;
@@ -110,7 +119,7 @@ class InteractivePrompt {
   void _describe(TrimItem item, int position, int total, TrimStats stats) {
     final details = <String>[
       paint(styleBold, item.displayName),
-      '${paint(lightCyan, item.location)}'
+      '${paint(lightCyan, linker.location(item))}'
           '${paint(darkGray, '  ·  ${formatBytes(item.sizeBytes)}')}',
       paint(darkGray, item.reason),
       for (final companion in item.companionPaths)

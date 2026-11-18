@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.2.0 — Clickable paths and unused variables
+
+### 🔗 Click to open the code
+- Every location in the report tables and on each review card is clickable
+  and opens the file at the reported line.
+- VS Code, Cursor and Android Studio / IntelliJ terminals link the
+  `path:line` text themselves; other terminals (iTerm2, WezTerm, kitty,
+  Ghostty, Windows Terminal) get an OSC 8 hyperlink.
+- Paths are now shown relative to the folder you run ftrim from, so they
+  stay clickable with `-p ../other_app`.
+- New `--editor auto|vscode|cursor|idea|file|none` option.
+
+### 🧮 Unused variables and fields
+- Unused top-level variables/constants and class fields (instance and
+  `static`) are reported and can be deleted (or undone) like everything else.
+- Conservative rules: a field set via `this.x`, an initializer list or a
+  named argument counts as used; `@override`, `abstract` and `external`
+  fields, and declarations of several variables at once (`int a, b;`), are
+  never reported. Fields of an unused class go away with the class.
+- New `--[no-]variables` flag and `scan.variables` config key (default on).
+
+### API
+- New: `DeclarationKind.variable`, `DeclarationKind.field`, `Linker`,
+  `CodeScanner(includeVariables:)`, `TrimConfig.scanVariables`,
+  `TrimReporter(linker:)`, `InteractivePrompt(linker:)`.
+
 ## 1.1.1
 
 - Documentation: a "What's new" section and a reorganised feature list in

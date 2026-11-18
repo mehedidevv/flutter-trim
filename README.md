@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
 An interactive command-line tool that finds **unused assets**, **unreferenced
-Dart files** and **unused classes, functions and methods** in a Flutter
+Dart files** and **unused classes, functions, methods and variables** in a Flutter
 project, then walks you through them **one by one** so you can **Keep** or
 **Delete** each one.
 
@@ -31,15 +31,15 @@ project, then walks you through them **one by one** so you can **Keep** or
   Quit and keep the rest
 ```
 
-## ✨ What's new in 1.1
-
-**Every delete can be undone.**
+## ✨ What's new
 
 | | |
 | --- | --- |
-| ↺ **Undo last delete** | Changed your mind during the review? Pick it from the menu and the last deleted item is back. Pick it again to go further back. |
-| 🛟 **`ftrim --restore`** | Brings back everything deleted in your last session, even after ftrim has exited. |
-| 💾 **Automatic backups** | Originals are saved to `.flutter_trim/backups/` before anything is touched. If a backup fails, nothing is deleted. |
+| 🔗 **Click to open the code** *(1.2)* | Every path in the report and on each card is clickable and opens the file **at the right line**: in the VS Code, Cursor and Android Studio terminals, and in iTerm2, WezTerm, kitty, Ghostty and Windows Terminal. |
+| 🧮 **Unused variables and fields** *(1.2)* | Top-level variables/constants and class fields (instance and static) that nothing reads or writes are now found and can be removed. |
+| ↺ **Undo last delete** *(1.1)* | Changed your mind during the review? Pick it from the menu and the last deleted item is back. Pick it again to go further back. |
+| 🛟 **`ftrim --restore`** *(1.1)* | Brings back everything deleted in your last session, even after ftrim has exited. |
+| 💾 **Automatic backups** *(1.1)* | Originals are saved to `.flutter_trim/backups/` before anything is touched. If a backup fails, nothing is deleted. |
 
 See the [changelog](CHANGELOG.md) for details.
 
@@ -63,6 +63,19 @@ See the [changelog](CHANGELOG.md) for details.
 - **Unused classes, mixins, enums, typedefs, functions and methods.** Uses the
   official `analyzer` AST instead of regular expressions, so comments, strings
   and self references do not confuse it.
+- **Unused variables and fields.** Top-level variables and constants, and
+  class fields (instance and `static`), that are never read, written or
+  initialized anywhere. A field set through `this.x` or an initializer list
+  counts as used; `@override` fields and `int a, b;` style declarations are
+  never reported. Turn it off with `--no-variables`.
+
+### 🔗 Jump straight to the code
+
+Every location (`lib/home/home_screen.dart:42`) is clickable and opens the
+file at that line. VS Code, Cursor and Android Studio / IntelliJ terminals
+work out of the box. In other terminals ftrim adds a hyperlink (Cmd/Ctrl +
+click): choose where it opens with `--editor vscode|cursor|idea|file`, or
+turn links off with `--editor none`.
 
 ### 🛡️ Safe by design
 
@@ -129,6 +142,8 @@ ftrim --restore                        # undo the deletions of the last session
 | `--dry-run` | `-n` | Print the report and exit without deleting. |
 | `--exclude <glob>` | `-e` | Never report matching paths. Repeatable. |
 | `--[no-]methods` | | Report unused methods inside used classes (default on). |
+| `--[no-]variables` | | Report unused top-level variables and class fields (default on). |
+| `--editor <name>` | | Where clickable paths open: `auto` (default), `vscode`, `cursor`, `idea`, `file` or `none`. |
 | `--json` | | Print the findings as JSON (implies `--dry-run`). |
 | `--fail-on-findings` | | Exit with code 1 when anything unused is found. |
 | `--[no-]backup` | | Back up everything before deleting it, so it can be undone (default on). |
@@ -205,10 +220,12 @@ scan:
   files: true
   code: true
   methods: true
+  variables: true
 ```
 
 CLI `--exclude` globs are added to the ones in the config file, and
-`--[no-]methods` overrides `scan.methods`.
+`--[no-]methods` overrides `scan.methods`, `--[no-]variables` overrides
+`scan.variables`.
 
 ### Protecting code inline
 

@@ -527,6 +527,160 @@ void main() => shape?.toString();
   });
 
   // Regressions found by running the tool on real 400-600 file apps.
+  group('Variables and fields', () {
+    late File source;
+
+    setUp(() {
+      source = File(p.join(root.path, 'lib', 'settings.dart'))
+        ..writeAsStringSync('''
+import 'package:flutter/widgets.dart';
+
+const usedTimeout = 30;
+const unusedTimeout = 99;
+final int a = 1, b = 2;
+
+// flutter_trim:keep
+const keptFlag = true;
+
+class Settings {
+  Settings(this.name) : _cache = {};
+
+  final String name;
+  final Map<String, int> _cache;
+  int unusedCounter = 0;
+  static const unusedLimit = 5;
+  @override
+  final int hashCode = 0;
+
+  int read() => usedTimeout + _cache.length;
+}
+
+class DeadHolder {
+  final int deadField = 1;
+}
+''');
+      File(p.join(root.path, 'lib', 'main.dart')).writeAsStringSync(
+        "import 'settings.dart';\n"
+        "void startSettings() => Settings('x').read();\n",
+        mode: FileMode.append,
+      );
+    });
+
+    List<TrimItem> scan({bool variables = true}) => CodeScanner(
+          ProjectContext.load(root.path),
+          includeVariables: variables,
+        ).scan().where((item) => item.path == source.path).toList();
+
+    test('reports unused top-level variables and fields', () {
+      final found = {for (final item in scan()) item.displayName: item.kind};
+      expect(found['unusedTimeout'], DeclarationKind.variable);
+      expect(found['Settings.unusedCounter'], DeclarationKind.field);
+      expect(found['Settings.unusedLimit'], DeclarationKind.field);
+    });
+
+    test('does not report used, kept, overridden or multi variables', () {
+      final names = scan().map((item) => item.displayName).toSet();
+      for (final name in [
+        'usedTimeout',
+        'keptFlag',
+        'a',
+        'b',
+        'Settings.name',
+        'Settings._cache',
+        'Settings.hashCode',
+        // Fields of an unused class go away with the class.
+        'DeadHolder.deadField',
+      ]) {
+        expect(names, isNot(contains(name)), reason: name);
+      }
+      expect(names, contains('DeadHolder'));
+    });
+
+    test('--no-variables skips them', () {
+      final kinds = scan(variables: false).map((item) => item.kind);
+      expect(kinds, isNot(contains(DeclarationKind.variable)));
+      expect(kinds, isNot(contains(DeclarationKind.field)));
+    });
+
+    test('removes a field and a variable and keeps the file valid', () {
+      final items = scan().where(
+        (item) => item.name == 'unusedCounter' || item.name == 'unusedTimeout',
+      );
+      for (final item in items) {
+        expect(const FileCleaner().clean(item).success, isTrue);
+      }
+      final content = source.readAsStringSync();
+      expect(content, isNot(contains('unusedCounter')));
+      expect(content, isNot(contains('unusedTimeout')));
+      expect(content, contains('usedTimeout = 30'));
+      expect(
+        parseString(content: content, throwIfDiagnostics: false).errors,
+        isEmpty,
+      );
+    });
+  });
+
+  group('Linker', () {
+    const item = TrimItem(
+      type: TrimItemType.declaration,
+      path: '/work/app/lib/home.dart',
+      relativePath: 'lib/home.dart',
+      name: 'Foo',
+      sizeBytes: 1,
+      reason: '',
+      lineNumber: 12,
+    );
+
+    Linker linker(String editor, {Map<String, String> env = const {}}) =>
+        Linker(
+          editor: editor,
+          environment: env,
+          workingDirectory: '/work/app',
+          terminal: true,
+        );
+
+    test('shows path:line relative to the current folder', () {
+      expect(
+        Linker.plain(workingDirectory: '/work/app').location(item),
+        p.join('lib', 'home.dart:12'),
+      );
+      expect(
+        Linker.plain(workingDirectory: '/other').displayPath(item.path),
+        item.path,
+      );
+    });
+
+    test('builds editor URIs with the line', () {
+      expect(
+        linker('vscode').uriFor(item.path, 12),
+        startsWith('vscode://file/'),
+      );
+      expect(linker('vscode').uriFor(item.path, 12), endsWith(':12'));
+      expect(linker('idea').uriFor(item.path, 12), contains('&line=12'));
+      expect(linker('file').uriFor(item.path), startsWith('file://'));
+      expect(linker('none').uriFor(item.path), isNull);
+    });
+
+    test('auto leaves plain text in IDE terminals, links elsewhere', () {
+      expect(
+        linker('auto', env: {'TERM_PROGRAM': 'vscode'}).uriFor(item.path),
+        isNull,
+      );
+      expect(
+        linker('auto', env: {'TERMINAL_EMULATOR': 'JetBrains-JediTerm'})
+            .uriFor(item.path),
+        isNull,
+      );
+      expect(linker('auto').uriFor(item.path), startsWith('file://'));
+    });
+
+    test('hyperlinks take no visible width', () {
+      final linked = linker('vscode').location(item);
+      expect(linked, contains('\x1B]8;;'));
+      expect(visibleLength(linked), p.join('lib', 'home.dart:12').length);
+    });
+  });
+
   group('Import resolution', () {
     void write(String relative, String content) {
       final file = File(p.joinAll([root.path, ...relative.split('/')]));

@@ -25,6 +25,7 @@ import '../models/trim_item.dart';
 ///   files: true
 ///   code: true
 ///   methods: true
+///   variables: true
 /// ```
 class TrimConfig {
   /// Creates a configuration. The defaults scan everything.
@@ -37,6 +38,7 @@ class TrimConfig {
     this.scanFiles = true,
     this.scanCode = true,
     this.scanMethods = true,
+    this.scanVariables = true,
   });
 
   /// Builds a configuration from a parsed YAML map. Unknown keys are
@@ -62,6 +64,7 @@ class TrimConfig {
       scanFiles: flag('files'),
       scanCode: flag('code'),
       scanMethods: flag('methods'),
+      scanVariables: flag('variables'),
     );
   }
 
@@ -93,6 +96,10 @@ class TrimConfig {
   /// (`scan.methods`).
   final bool scanMethods;
 
+  /// Whether unused top-level variables and class fields are reported
+  /// (`scan.variables`).
+  final bool scanVariables;
+
   /// Returns a copy with the given fields replaced.
   TrimConfig copyWith({
     List<String>? exclude,
@@ -103,6 +110,7 @@ class TrimConfig {
     bool? scanFiles,
     bool? scanCode,
     bool? scanMethods,
+    bool? scanVariables,
   }) {
     return TrimConfig(
       exclude: exclude ?? this.exclude,
@@ -113,6 +121,7 @@ class TrimConfig {
       scanFiles: scanFiles ?? this.scanFiles,
       scanCode: scanCode ?? this.scanCode,
       scanMethods: scanMethods ?? this.scanMethods,
+      scanVariables: scanVariables ?? this.scanVariables,
     );
   }
 

@@ -6,7 +6,8 @@ enum TrimItemType {
   /// A `.dart` file in `lib/` that no reachable library imports.
   file('Dart file'),
 
-  /// A class, mixin, enum, typedef, top-level function or method.
+  /// A class, mixin, enum, typedef, top-level function, method, variable or
+  /// field.
   declaration('Declaration');
 
   const TrimItemType(this.label);
@@ -33,7 +34,13 @@ enum DeclarationKind {
   function('Function'),
 
   /// A method inside a class, mixin, enum or extension.
-  method('Method');
+  method('Method'),
+
+  /// A top-level variable or constant.
+  variable('Variable'),
+
+  /// A field (instance or static) inside a class, mixin, enum or extension.
+  field('Field');
 
   const DeclarationKind(this.label);
 
@@ -81,7 +88,7 @@ class TrimItem {
   /// Declaration kind (declarations only).
   final DeclarationKind? kind;
 
-  /// Enclosing class/mixin/enum/extension for methods.
+  /// Enclosing class/mixin/enum/extension for methods and fields.
   final String? parentName;
 
   /// Extra absolute paths deleted together with this item
@@ -91,7 +98,7 @@ class TrimItem {
   /// Short label such as `Asset`, `Dart file`, `Class` or `Method`.
   String get typeLabel => kind?.label ?? type.label;
 
-  /// [name], prefixed with `Parent.` for methods.
+  /// [name], prefixed with `Parent.` for methods and fields.
   String get displayName => parentName == null ? name : '$parentName.$name';
 
   /// `relative/path.dart:line` for declarations, the relative path otherwise.

@@ -27,6 +27,8 @@ Everything lives in `test/scanner_test.dart`:
 | `CodeScanner` | Unused class, function and methods; protections (`keep` marker, `@pragma`, `@override`, `main`, private-but-used); `--no-methods`; line numbers |
 | `FileCleaner` | Class removal with doc comment (re-parses clean), method removal, file and part deletion, dry run, missing file, `removeRange` blank-line handling |
 | `BackupStore` | Undo of a declaration removal (byte for byte), file + part restore, several edits of one file restored in order, backups not scanned, `--restore` |
+| `Variables and fields` | Unused top-level variable / instance & static fields reported; used, kept, `@override`, multi-variable, fields of dead class not reported; `--no-variables`; removal keeps file valid |
+| `Linker` | cwd-relative `path:line`, editor URIs, auto mode in IDE terminals, OSC 8 has zero visible width |
 | `ConfigLoader` | YAML parsing and its effect on scanners |
 | `TrimCommandRunner` | `--version`, conflicting flags (64), dry run doesn't delete, missing pubspec (66) |
 | `DeclarationUtils` | Names after class modifiers (`abstract base`, `sealed`), enums, mixins, typedefs; abstract methods never reported |

@@ -19,9 +19,11 @@ String formatBytes(int bytes) {
   return '${size.toStringAsFixed(size >= 10 ? 0 : 1)} ${units[unit]}';
 }
 
-final RegExp _ansi = RegExp('\x1B\\[[0-9;]*m');
+/// Color codes and OSC 8 hyperlink markers; neither takes up columns.
+final RegExp _ansi = RegExp('\x1B(\\[[0-9;]*m|\\]8;;[^\x1B]*\x1B\\\\)');
 
-/// Number of terminal columns [text] occupies (ANSI color codes excluded).
+/// Number of terminal columns [text] occupies (ANSI color codes and
+/// hyperlink markers excluded).
 int visibleLength(String text) => text.replaceAll(_ansi, '').length;
 
 /// Pads [text] with spaces to [width] visible columns.

@@ -1,8 +1,8 @@
 name: flutter_trim
 description: >-
-  Interactive CLI that finds unused assets, Dart files, classes, functions and
-  methods in Flutter projects. Review each one, delete safely, undo anytime.
-version: 1.1.1
+  Interactive CLI that finds unused assets, Dart files, classes, methods and
+  variables in Flutter projects. Click to open, delete safely, undo anytime.
+version: 1.2.0
 homepage: https://github.com/mehedidevv/flutter-trim
 repository: https://github.com/mehedidevv/flutter-trim
 issue_tracker: https://github.com/mehedidevv/flutter-trim/issues

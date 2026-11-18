@@ -11,6 +11,7 @@ flutter-trim/
 │       ├── cli/
 │       │   ├── command_runner.dart     # TrimCommandRunner: ArgParser, pipeline, --json, git check, usage
 │       │   ├── interactive_prompt.dart # InteractivePrompt + PromptDecision: item cards, menu, deletion
+│       │   ├── links.dart              # Linker: clickable path:line (IDE terminals, OSC 8, --editor)
 │       │   ├── reporter.dart           # TrimReporter (banner, summary, tables, session summary), TrimStats
 │       │   └── ui.dart                 # Ui (boxes, tables, progress bar), paint, formatBytes, ANSI-aware width
 │       ├── scanners/
@@ -56,6 +57,7 @@ flutter-trim/
 | `PromptDecision` | cli/interactive_prompt.dart | `keep, delete, deleteAll, quit` with labels. |
 | `TrimReporter` | cli/reporter.dart | Banner, summary table, detail tables, clean/dry-run messages, session summary. |
 | `TrimStats` | cli/reporter.dart | Mutable counters for a session. |
+| `Linker` | cli/links.dart | cwd-relative `path:line`; OSC 8 hyperlink (vscode/cursor/idea/file URI) unless an IDE terminal links plain text. |
 | `Ui` | cli/ui.dart | `box`, `table` (with `shrink` column), `progressBar`; width from the terminal. |
 | `paint`, `formatBytes`, `visibleLength`, `fitStart`, `fitEnd` | cli/ui.dart | Formatting helpers (ANSI-aware). |
 | `ProjectContext` | scanners/project_context.dart | Root, package name, pubspec, config, filter, parsed files; `fileAt` falls back to a case-insensitive match. |

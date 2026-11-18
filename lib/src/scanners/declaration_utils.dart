@@ -24,11 +24,27 @@ abstract final class DeclarationUtils {
     if (member is TypeAlias) return member.name.lexeme;
     if (member is FunctionDeclaration) return member.name.lexeme;
     if (member is ExtensionDeclaration) return member.name?.lexeme;
+    if (member is TopLevelVariableDeclaration) {
+      return singleVariableName(member.variables);
+    }
     return null;
   }
 
+  /// The name of the only variable in [list], or `null` when [list]
+  /// declares several (`int a, b;`). Multi-variable declarations are never
+  /// reported, so a removal always takes out a whole statement.
+  static String? singleVariableName(VariableDeclarationList list) {
+    final variables = list.variables;
+    return variables.length == 1 ? variables.first.name.lexeme : null;
+  }
+
+  /// The name of a field declaration with exactly one variable, or `null`.
+  static String? fieldNameOf(FieldDeclaration field) =>
+      singleVariableName(field.fields);
+
   /// The reportable kind of a top-level member, or `null` when the member is
-  /// never reported on its own (extensions, variables, getters/setters).
+  /// never reported on its own (extensions, getters/setters, declarations
+  /// of several variables at once).
   static DeclarationKind? kindOf(CompilationUnitMember member) {
     if (member is ClassDeclaration || member is ClassTypeAlias) {
       return DeclarationKind.classDeclaration;
@@ -38,6 +54,10 @@ abstract final class DeclarationUtils {
     if (member is TypeAlias) return DeclarationKind.typedefDeclaration;
     if (member is FunctionDeclaration && !member.isGetter && !member.isSetter) {
       return DeclarationKind.function;
+    }
+    if (member is TopLevelVariableDeclaration &&
+        singleVariableName(member.variables) != null) {
+      return DeclarationKind.variable;
     }
     return null;
   }
@@ -82,6 +102,11 @@ abstract final class DeclarationUtils {
         if (containerNameOf(member) != item.parentName) continue;
         for (final method in membersOf(member).whereType<MethodDeclaration>()) {
           if (method.name.lexeme == item.name) return method;
+        }
+      } else if (item.kind == DeclarationKind.field) {
+        if (containerNameOf(member) != item.parentName) continue;
+        for (final field in membersOf(member).whereType<FieldDeclaration>()) {
+          if (fieldNameOf(field) == item.name) return field;
         }
       } else if (kindOf(member) == item.kind && nameOf(member) == item.name) {
         return member;
