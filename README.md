@@ -27,20 +27,29 @@ project, then walks you through them **one by one** so you can **Keep** or
 ❯ Keep
   Delete
   Delete all remaining
+  Undo last delete (OldPromoCard)
   Quit and keep the rest
 ```
 
+## ✨ What's new in 1.1
+
+**Every delete can be undone.**
+
+| | |
+| --- | --- |
+| ↺ **Undo last delete** | Changed your mind during the review? Pick it from the menu and the last deleted item is back. Pick it again to go further back. |
+| 🛟 **`ftrim --restore`** | Brings back everything deleted in your last session, even after ftrim has exited. |
+| 💾 **Automatic backups** | Originals are saved to `.flutter_trim/backups/` before anything is touched. If a backup fails, nothing is deleted. |
+
+See the [changelog](CHANGELOG.md) for details.
+
 > Formerly published as `flutter_sweeper`. The package was renamed and its
-> import resolution rewritten for large projects; see the
-> [changelog](CHANGELOG.md).
+> import resolution rewritten for large projects.
 
 ## Features
 
-- **Built for large apps.** Tested on real Flutter apps with 400–600 Dart
-  files. Import paths with spaces (`common%20widget/`) and imports whose
-  letter case differs from the file name (`gatewayController.dart` for
-  `gateWayController.dart`, which macOS and Windows accept) are resolved
-  correctly, so used files are never reported.
+### 🔍 What it finds
+
 - **Unused assets.** Reads `flutter: assets:` from `pubspec.yaml`, expands
   directory entries the way Flutter does (including `2.0x/` and `3.0x/`
   variants), also finds files in `assets/` that were never declared, and
@@ -54,14 +63,30 @@ project, then walks you through them **one by one** so you can **Keep** or
 - **Unused classes, mixins, enums, typedefs, functions and methods.** Uses the
   official `analyzer` AST instead of regular expressions, so comments, strings
   and self references do not confuse it.
-- **Safe removal.** Declarations are cut out together with their doc comments
-  and annotations, and the file is parsed again before anything is written.
-  If the edit would add a syntax error, the file is left untouched.
-- **You decide.** Keep / Delete / Delete all remaining / Quit for each item,
-  with a code preview. `--dry-run` only prints the report.
-- **Undo.** Everything is backed up before it is deleted. Undo the last
-  delete during the review, or bring back a whole session with
+
+### 🛡️ Safe by design
+
+- **You decide.** Every finding is shown as a card with a code preview.
+  Choose Keep, Delete, Delete all remaining or Quit. Nothing is deleted
+  without your choice, and `--dry-run` only prints the report.
+- **Undo anytime.** Everything is backed up before it is deleted. Undo the
+  last delete during the review, or bring back a whole session with
   `ftrim --restore`.
+- **Never breaks a file.** Declarations are cut out together with their doc
+  comments and annotations, and the file is parsed again before anything is
+  written. If the edit would add a syntax error, the file is left untouched.
+- **Conservative.** When in doubt, an item is treated as used. Generated
+  code is never reported, `@pragma` / `@protected` code and
+  `// flutter_trim:keep` are respected.
+
+### 🚀 Built for real projects
+
+- **Large apps.** Tested on production Flutter apps with 400–600 Dart
+  files: 0 false positives across 134 findings. Import paths with spaces
+  (`common%20widget/`) and imports whose letter case differs from the file
+  name (which macOS and Windows accept) are resolved correctly.
+- **No setup.** Pure Dart. No Flutter SDK or `pub get` needed in the target
+  project. An optional `flutter_trim.yaml` covers excludes and entry points.
 - **CI ready.** `--json` for machine-readable output and
   `--fail-on-findings` to fail a build when something is unused.
 

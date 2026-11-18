@@ -1,15 +1,36 @@
 # Changelog
 
-## 1.1.0
+## 1.1.1
 
-- **Undo deletions.** Every deleted file and removed declaration is backed
-  up in `.flutter_trim/backups/` first.
-- New **Undo last delete** choice in the interactive review.
-- New `--restore` flag: brings back everything deleted in the most recent
-  session.
-- New `--[no-]backup` flag (default on). The "not under git" confirmation is
-  now only shown when backups are off.
-- New API: `BackupStore`, `BackupEntry`, `backupDirName`,
+- Documentation: a "What's new" section and a reorganised feature list in
+  the README, a clearer package description. No code changes.
+
+## 1.1.0 — Undo and restore
+
+Deleting is no longer final. Every deletion can be brought back.
+
+### ↺ Undo during the review
+- New **Undo last delete** choice in the menu. It appears as soon as
+  something was deleted and names the item it will bring back. Choose it
+  again to step further back.
+- An undone item counts as kept, and the session summary shows how many
+  were undone.
+
+### 🛟 Restore later
+- `ftrim --restore` brings back everything deleted in the most recent
+  session, newest first, so several edits of the same file unwind exactly.
+  Run it again to restore an older session.
+
+### 💾 Automatic backups
+- Before a file is deleted or a declaration is removed, the original is
+  copied to `.flutter_trim/backups/<session>/` in the project root. If the
+  backup cannot be written, nothing is deleted.
+- The backup folder is never scanned. Add `.flutter_trim/` to `.gitignore`.
+- `--no-backup` turns backups off. The "not under git" confirmation is now
+  only shown in that case.
+
+### API
+- New: `BackupStore`, `BackupEntry`, `backupDirName`,
   `FileCleaner(backup:)`, `CleanResult.backupId`,
   `PromptDecision.undo`, `TrimStats.restored` / `backedUp`.
 
