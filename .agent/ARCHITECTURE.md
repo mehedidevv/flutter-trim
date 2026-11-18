@@ -167,6 +167,21 @@ because `isAbstract` is deprecated.
   of the file.
 - `dryRun` mode computes the results without writing (API only).
 
+### 4.6.1 BackupStore: undo
+- The CLI creates `BackupStore.start(root)` per interactive session (unless
+  `--no-backup`) and passes it to `FileCleaner(backup:)`.
+- Right before writing/deleting, `FileCleaner` calls `save(label, paths)`,
+  which copies the originals to
+  `<root>/.flutter_trim/backups/<session>/<id>/<relative path>` and appends an
+  entry to `manifest.json`. If the copy fails, nothing is deleted.
+- `InteractivePrompt` keeps a stack of `(item, backupId)` and offers
+  **Undo last delete**; `restore(id)` copies the files back and marks the
+  entry `restored`.
+- `ftrim --restore` → `BackupStore.latest(root).restoreAll()` (newest first,
+  so several edits of one file unwind correctly).
+- The folder starts with a dot, so `ProjectContext` and `AssetScanner` never
+  scan it.
+
 ### 4.7 Config and filtering
 - `TrimConfig` is immutable and has `fromMap` and `copyWith`. Unknown
   keys are ignored.

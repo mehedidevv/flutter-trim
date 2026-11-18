@@ -18,6 +18,12 @@ class TrimStats {
   /// Items whose removal failed.
   int failed = 0;
 
+  /// Deletions that were undone during the session (counted as kept).
+  int restored = 0;
+
+  /// Whether deletions were backed up and can be undone with `--restore`.
+  bool backedUp = false;
+
   /// Total bytes reclaimed.
   int bytesFreed = 0;
 
@@ -201,6 +207,7 @@ class TrimReporter {
             ),
             row('Kept', lightGreen, stats.kept),
             row('Skipped', darkGray, stats.skipped),
+            if (stats.restored > 0) row('Undone', lightCyan, stats.restored),
             if (stats.failed > 0) row('Failed', lightYellow, stats.failed),
           ],
           if (stats.failures.isNotEmpty)
@@ -223,6 +230,15 @@ class TrimReporter {
         ..info(step(1, 'dart fix --apply', 'remove imports that became unused'))
         ..info(step(2, 'flutter analyze', 'make sure everything compiles'))
         ..info(step(3, 'git diff', 'review the changes before committing'));
+    }
+    if (stats.backedUp && stats.deleted > 0) {
+      logger
+        ..info('')
+        ..info(
+          '${Ui.indent}${paint(lightCyan, '↺')} Changed your mind? Run '
+          '${paint(lightCyan, 'ftrim --restore')} to bring back everything '
+          'deleted in this session.',
+        );
     }
     logger.info('');
   }

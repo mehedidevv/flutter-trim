@@ -5,11 +5,12 @@ import 'package:analyzer/dart/analysis/utilities.dart';
 
 import '../models/trim_item.dart';
 import '../scanners/declaration_utils.dart';
+import 'backup_store.dart';
 
 /// Outcome of removing one [TrimItem].
 class CleanResult {
   /// The item was removed and [bytesFreed] bytes were reclaimed.
-  const CleanResult.success(this.bytesFreed, {this.message})
+  const CleanResult.success(this.bytesFreed, {this.message, this.backupId})
       : success = true,
         error = null;
 
@@ -17,7 +18,8 @@ class CleanResult {
   const CleanResult.failure(this.error)
       : success = false,
         bytesFreed = 0,
-        message = null;
+        message = null,
+        backupId = null;
 
   /// Whether the removal succeeded.
   final bool success;
@@ -30,6 +32,10 @@ class CleanResult {
 
   /// Why the removal failed, or `null` on success.
   final String? error;
+
+  /// Id of the [BackupStore] entry that can undo this removal, or `null`
+  /// when no backup was made.
+  final int? backupId;
 }
 
 /// Deletes asset/Dart files and surgically removes Dart declarations.
@@ -38,11 +44,19 @@ class CleanResult {
 /// earlier edits to the same file never leave stale offsets behind. If the
 /// edit would introduce new syntax errors the file is left untouched.
 class FileCleaner {
-  /// Creates a cleaner. With [dryRun] nothing is written to disk.
-  const FileCleaner({this.dryRun = false});
+  /// Creates a cleaner. With [dryRun] nothing is written to disk. With a
+  /// [backup] store every file is copied there before it is changed, so the
+  /// change can be undone.
+  const FileCleaner({this.dryRun = false, this.backup});
 
   /// When true nothing is written; results report what *would* happen.
   final bool dryRun;
+
+  /// Where originals are saved before deletion, or `null` for no backups.
+  final BackupStore? backup;
+
+  int? _backup(TrimItem item, List<String> paths) =>
+      dryRun ? null : backup?.save(item.displayName, paths);
 
   /// Deletes the file(s) of an asset or Dart file item, or removes a
   /// declaration from its file. Never throws for file-system problems;
@@ -59,9 +73,14 @@ class FileCleaner {
   }
 
   CleanResult _deleteFiles(TrimItem item) {
+    final paths = [item.path, ...item.companionPaths];
+    if (!paths.any((path) => File(path).existsSync())) {
+      return const CleanResult.failure('File no longer exists');
+    }
+    final backupId = _backup(item, paths);
     var freed = 0;
     var removed = 0;
-    for (final path in [item.path, ...item.companionPaths]) {
+    for (final path in paths) {
       final file = File(path);
       if (!file.existsSync()) continue;
       freed += file.lengthSync();
@@ -74,6 +93,7 @@ class FileCleaner {
     return CleanResult.success(
       freed,
       message: removed > 1 ? 'Removed $removed files' : null,
+      backupId: backupId,
     );
   }
 
@@ -109,9 +129,11 @@ class FileCleaner {
       );
     }
 
+    final backupId = _backup(item, [item.path]);
     if (!dryRun) file.writeAsStringSync(updated);
     return CleanResult.success(
       utf8.encode(content).length - utf8.encode(updated).length,
+      backupId: backupId,
     );
   }
 

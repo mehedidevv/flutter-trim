@@ -58,6 +58,10 @@ documented in the README.
 
 ## Roadmap
 Done in flutter_trim 1.0.0: `--json`, `--fail-on-findings`.
+Done (Unreleased): backups, **Undo last delete**, `--restore`, `--[no-]backup`.
+
+Note: backups are never cleaned up automatically; users delete
+`.flutter_trim/` themselves.
 
 1. `--yes` / `--delete-all` for non-interactive cleanup (with a git-clean
    precondition).

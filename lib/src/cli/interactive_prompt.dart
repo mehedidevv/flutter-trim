@@ -18,6 +18,10 @@ enum PromptDecision {
   /// Delete this and every remaining item (after a confirmation).
   deleteAll('Delete all remaining'),
 
+  /// Bring back the most recently deleted item (only offered when the
+  /// cleaner keeps backups and something was deleted).
+  undo('Undo last delete'),
+
   /// Stop and leave everything that is left.
   quit('Quit and keep the rest');
 
@@ -44,9 +48,12 @@ class InteractivePrompt {
 
   static const int _previewLines = 6;
 
+  /// Deletions that can still be undone in this session, newest last.
+  final List<_Deletion> _undoable = [];
+
   /// Asks about each of [items] in order and returns what happened.
   TrimStats run(List<TrimItem> items) {
-    final stats = TrimStats();
+    final stats = TrimStats()..backedUp = cleaner.backup != null;
     var deleteAll = false;
 
     for (var i = 0; i < items.length; i++) {
@@ -56,11 +63,21 @@ class InteractivePrompt {
         _describe(item, i + 1, items.length, stats);
         final decision = logger.chooseOne<PromptDecision>(
           'What do you want to do?',
-          choices: PromptDecision.values,
+          choices: [
+            for (final choice in PromptDecision.values)
+              if (choice != PromptDecision.undo || _undoable.isNotEmpty) choice,
+          ],
           defaultValue: PromptDecision.keep,
-          display: (choice) => choice.label,
+          display: (choice) => choice == PromptDecision.undo
+              ? '${choice.label} (${_undoable.last.item.displayName})'
+              : choice.label,
         );
 
+        if (decision == PromptDecision.undo) {
+          _undo(stats);
+          i--; // Ask again about the current item.
+          continue;
+        }
         if (decision == PromptDecision.keep) {
           stats.kept++;
           logger.info('${Ui.indent}${paint(lightGreen, '●')} Kept');
@@ -138,9 +155,31 @@ class InteractivePrompt {
     }
   }
 
+  void _undo(TrimStats stats) {
+    final last = _undoable.removeLast();
+    try {
+      cleaner.backup!.restore(last.backupId);
+    } on FileSystemException catch (e) {
+      logger.warn('Could not undo ${last.item.displayName}: ${e.message}');
+      return;
+    }
+    stats
+      ..deleted -= 1
+      ..bytesFreed -= last.bytesFreed
+      ..kept += 1
+      ..restored += 1;
+    logger.info(
+      '${Ui.indent}${paint(lightCyan, '↺')} Restored '
+      '${paint(styleBold, last.item.displayName)} (now kept)',
+    );
+  }
+
   void _delete(TrimItem item, TrimStats stats) {
     final result = cleaner.clean(item);
     if (result.success) {
+      if (result.backupId case final id?) {
+        _undoable.add(_Deletion(item, id, result.bytesFreed));
+      }
       stats.deleted++;
       stats.bytesFreed += result.bytesFreed;
       if (item.type != TrimItemType.asset) stats.touchedDartCode = true;
@@ -156,4 +195,13 @@ class InteractivePrompt {
       logger.warn('Could not delete ${item.displayName}: ${result.error}');
     }
   }
+}
+
+/// A deletion that can be undone from its backup.
+class _Deletion {
+  const _Deletion(this.item, this.backupId, this.bytesFreed);
+
+  final TrimItem item;
+  final int backupId;
+  final int bytesFreed;
 }

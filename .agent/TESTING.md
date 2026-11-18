@@ -26,6 +26,7 @@ Everything lives in `test/scanner_test.dart`:
 | `FileScanner` | Unreachable library with its `part` companion, configured entry points |
 | `CodeScanner` | Unused class, function and methods; protections (`keep` marker, `@pragma`, `@override`, `main`, private-but-used); `--no-methods`; line numbers |
 | `FileCleaner` | Class removal with doc comment (re-parses clean), method removal, file and part deletion, dry run, missing file, `removeRange` blank-line handling |
+| `BackupStore` | Undo of a declaration removal (byte for byte), file + part restore, several edits of one file restored in order, backups not scanned, `--restore` |
 | `ConfigLoader` | YAML parsing and its effect on scanners |
 | `TrimCommandRunner` | `--version`, conflicting flags (64), dry run doesn't delete, missing pubspec (66) |
 | `DeclarationUtils` | Names after class modifiers (`abstract base`, `sealed`), enums, mixins, typedefs; abstract methods never reported |

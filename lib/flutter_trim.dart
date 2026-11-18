@@ -10,6 +10,8 @@
 /// ```
 library;
 
+export 'src/cleaners/backup_store.dart'
+    show BackupEntry, BackupStore, backupDirName;
 export 'src/cleaners/file_cleaner.dart' show CleanResult, FileCleaner;
 export 'src/cli/command_runner.dart' show TrimCommandRunner;
 export 'src/cli/interactive_prompt.dart' show InteractivePrompt, PromptDecision;

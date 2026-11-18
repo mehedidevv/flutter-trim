@@ -20,6 +20,7 @@ flutter-trim/
 │       │   ├── code_scanner.dart       # CodeScanner, _Usage, _Candidate
 │       │   └── declaration_utils.dart  # DeclarationUtils: shared by CodeScanner & FileCleaner
 │       ├── cleaners/
+│       │   ├── backup_store.dart       # BackupStore, BackupEntry: backups for undo / --restore
 │       │   └── file_cleaner.dart       # FileCleaner, CleanResult, removeRange
 │       ├── models/
 │       │   └── trim_item.dart          # TrimItem, TrimItemType, DeclarationKind, ExitCodes, TrimException
@@ -63,7 +64,8 @@ flutter-trim/
 | `FileScanner` | scanners/file_scanner.dart | Unreachable `lib/` file detection. `reachableFiles()` and `resolveUri()` are public. |
 | `CodeScanner` | scanners/code_scanner.dart | Unused declaration and method detection. |
 | `DeclarationUtils` | scanners/declaration_utils.dart | `nameOf`, `kindOf`, `containerNameOf`, `membersOf`, `hasAnnotation`, `locate`. |
-| `FileCleaner` | cleaners/file_cleaner.dart | `clean(item) → CleanResult`. Static `removeRange`. |
+| `FileCleaner` | cleaners/file_cleaner.dart | `clean(item) → CleanResult` (with `backupId` when a `BackupStore` is set). Static `removeRange`. |
+| `BackupStore` | cleaners/backup_store.dart | Copies originals to `.flutter_trim/backups/<session>/<id>/` + `manifest.json`; `save`, `restore(id)`, `restoreAll`, `latest(root)`. |
 | `TrimItem` & enums | models/trim_item.dart | Finding model, `toJson()` used by `--json`. |
 | `ExitCodes` | models/trim_item.dart | 0, 1, 64, 66, 70, 78. |
 | `TrimException` | models/trim_item.dart | User-facing error with an exit code. |

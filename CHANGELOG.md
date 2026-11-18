@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0
+
+- **Undo deletions.** Every deleted file and removed declaration is backed
+  up in `.flutter_trim/backups/` first.
+- New **Undo last delete** choice in the interactive review.
+- New `--restore` flag: brings back everything deleted in the most recent
+  session.
+- New `--[no-]backup` flag (default on). The "not under git" confirmation is
+  now only shown when backups are off.
+- New API: `BackupStore`, `BackupEntry`, `backupDirName`,
+  `FileCleaner(backup:)`, `CleanResult.backupId`,
+  `PromptDecision.undo`, `TrimStats.restored` / `backedUp`.
+
 ## 1.0.0
 
 First release under the name `flutter_trim`. It continues

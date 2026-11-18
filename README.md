@@ -59,6 +59,9 @@ project, then walks you through them **one by one** so you can **Keep** or
   If the edit would add a syntax error, the file is left untouched.
 - **You decide.** Keep / Delete / Delete all remaining / Quit for each item,
   with a code preview. `--dry-run` only prints the report.
+- **Undo.** Everything is backed up before it is deleted. Undo the last
+  delete during the review, or bring back a whole session with
+  `ftrim --restore`.
 - **CI ready.** `--json` for machine-readable output and
   `--fail-on-findings` to fail a build when something is unused.
 
@@ -90,6 +93,7 @@ ftrim -p ../other_app                  # scan another project
 ftrim -e "lib/legacy/**" -e "assets/legal/**"
 ftrim --json > report.json             # machine-readable report
 ftrim -n --fail-on-findings            # exit code 1 if anything is unused
+ftrim --restore                        # undo the deletions of the last session
 ```
 
 | Option | Abbr | Description |
@@ -102,6 +106,8 @@ ftrim -n --fail-on-findings            # exit code 1 if anything is unused
 | `--[no-]methods` | | Report unused methods inside used classes (default on). |
 | `--json` | | Print the findings as JSON (implies `--dry-run`). |
 | `--fail-on-findings` | | Exit with code 1 when anything unused is found. |
+| `--[no-]backup` | | Back up everything before deleting it, so it can be undone (default on). |
+| `--restore` | | Bring back everything deleted in the most recent session, then exit. Run it again to undo older sessions. |
 | `--verbose` | `-v` | Diagnostic output. |
 | `--version` | | Print the version. |
 | `--help` | `-h` | Show usage. |
@@ -113,7 +119,17 @@ ftrim -n --fail-on-findings            # exit code 1 if anything is unused
 | **Keep** | Leave the item and move on to the next one. |
 | **Delete** | Delete the file or remove the declaration now. |
 | **Delete all remaining** | After a confirmation, delete this and every remaining item. |
+| **Undo last delete** | Put back the item deleted most recently (shown once something was deleted). It then counts as kept. |
 | **Quit and keep the rest** | Stop and leave everything that is left. |
+
+### Undo and restore
+
+Before a file is deleted or a declaration is removed, flutter_trim copies
+the original into `.flutter_trim/backups/<session>/` in the project root.
+Each deletion can be undone during the review with **Undo last delete**, and
+`ftrim --restore` brings back every deletion of the most recent session,
+newest first. Add `.flutter_trim/` to your `.gitignore`. Delete that folder
+when you no longer need the backups. Pass `--no-backup` to skip backups.
 
 When the terminal is not interactive (CI, piped output), flutter_trim only
 prints the report.

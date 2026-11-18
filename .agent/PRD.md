@@ -160,6 +160,11 @@ without breaking the build.
 
 | `--json` | Print findings as JSON; implies dry run. |
 | `--fail-on-findings` | Exit 1 when anything unused is found. |
+| `--[no-]backup` | Back up before deleting (default on). |
+| `--restore` | Undo every deletion of the most recent session and exit. |
+
+FR-6.1 Undo: during review, **Undo last delete** restores the most recently
+deleted item from its backup (it then counts as kept).
 
 Two executables: `ftrim` and `flutter_trim`.
 

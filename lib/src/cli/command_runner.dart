@@ -5,6 +5,7 @@ import 'package:args/args.dart';
 import 'package:mason_logger/mason_logger.dart';
 import 'package:path/path.dart' as p;
 
+import '../cleaners/backup_store.dart';
 import '../cleaners/file_cleaner.dart';
 import '../models/trim_item.dart';
 import '../scanners/asset_scanner.dart';
@@ -79,6 +80,18 @@ class TrimCommandRunner {
       help: 'Exit with code 1 when anything unused is found (for CI).',
     )
     ..addFlag(
+      'backup',
+      defaultsTo: true,
+      help: 'Save a copy of everything before deleting it (in '
+          '$backupDirName/), so it can be undone.',
+    )
+    ..addFlag(
+      'restore',
+      negatable: false,
+      help: 'Bring back everything deleted in the most recent session '
+          'and exit.',
+    )
+    ..addFlag(
       'verbose',
       abbr: 'v',
       negatable: false,
@@ -139,6 +152,7 @@ class TrimCommandRunner {
         exitCode: ExitCodes.noInput,
       );
     }
+    if (results['restore'] as bool) return _restore(root);
     if (!File(p.join(root, 'pubspec.yaml')).existsSync()) {
       throw TrimException(
         'No pubspec.yaml in $root. Use --path to point at a project root.',
@@ -266,9 +280,11 @@ class TrimCommandRunner {
       return findingsExit;
     }
 
-    if (!_isInsideGitRepo(root)) {
+    final backup = results['backup'] as bool;
+    if (!backup && !_isInsideGitRepo(root)) {
       _logger.warn(
-        'This project is not under git, so deletions cannot be undone.',
+        'Backups are off and this project is not under git, so deletions '
+        'cannot be undone.',
       );
       if (!_logger.confirm('Continue anyway?', defaultValue: false)) {
         return ExitCodes.success;
@@ -277,10 +293,39 @@ class TrimCommandRunner {
 
     final stats = InteractivePrompt(
       logger: _logger,
-      cleaner: const FileCleaner(),
+      cleaner: FileCleaner(backup: backup ? BackupStore.start(root) : null),
     ).run(items);
     reporter.printSummary(stats);
     return stats.failed > 0 ? ExitCodes.failure : ExitCodes.success;
+  }
+
+  /// Undoes every pending change of the latest backup session.
+  int _restore(String root) {
+    final store = BackupStore.latest(root);
+    if (store == null) {
+      _logger.info('Nothing to restore: no ftrim backups found in $root.');
+      return ExitCodes.success;
+    }
+    final pending = store.pending;
+    _logger.info(
+      'Backup session ${paint(lightCyan, store.name)} has '
+      '${pending.length} deletion(s):',
+    );
+    for (final entry in pending) {
+      _logger.info('  ${paint(darkGray, '•')} ${entry.label}');
+    }
+    final interactive =
+        _interactiveOverride ?? (stdin.hasTerminal && stdout.hasTerminal);
+    if (interactive &&
+        !_logger.confirm('Restore all of them?', defaultValue: true)) {
+      return ExitCodes.success;
+    }
+    final restored = store.restoreAll();
+    _logger.success(
+      'Restored ${restored.length} item(s). Run ftrim --restore again to '
+      'undo an older session.',
+    );
+    return ExitCodes.success;
   }
 
   static String _count(int n) => n == 0 ? 'none unused' : '$n unused';
@@ -360,6 +405,7 @@ ${example('ftrim --code-only --no-methods', 'Files, classes and functions only')
 ${example('ftrim --json > report.json', 'Machine-readable report')}
 ${example('ftrim -n --fail-on-findings', 'Fail a CI job when anything is unused')}
 ${example('ftrim -e "lib/legacy/**"', 'Never report the legacy folder')}
+${example('ftrim --restore', 'Undo the deletions of the last session')}
 ''');
   }
 }

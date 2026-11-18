@@ -314,6 +314,83 @@ void main() {
     });
   });
 
+  group('BackupStore', () {
+    test('undoes a declaration removal byte for byte', () {
+      final item = CodeScanner(context)
+          .scan()
+          .firstWhere((item) => item.name == 'UnusedWidget');
+      final original = File(item.path).readAsStringSync();
+      final store = BackupStore.start(root.path);
+
+      final result = FileCleaner(backup: store).clean(item);
+      expect(result.backupId, isNotNull);
+      expect(File(item.path).readAsStringSync(), isNot(original));
+
+      store.restore(result.backupId!);
+      expect(File(item.path).readAsStringSync(), original);
+      expect(store.pending, isEmpty);
+    });
+
+    test('restores deleted files with their parts', () {
+      final item = FileScanner(context).scan().single;
+      final cleaner = FileCleaner(backup: BackupStore.start(root.path));
+      expect(cleaner.clean(item).success, isTrue);
+      expect(File(item.path).existsSync(), isFalse);
+
+      final latest = BackupStore.latest(root.path)!;
+      expect(latest.restoreAll(), hasLength(1));
+      expect(File(item.path).existsSync(), isTrue);
+      expect(File(item.companionPaths.single).existsSync(), isTrue);
+      expect(BackupStore.latest(root.path), isNull);
+    });
+
+    test('restoreAll undoes several edits of one file in order', () {
+      final items = CodeScanner(context)
+          .scan()
+          .where((item) => item.relativePath == 'lib/widgets/home.dart')
+          .toList();
+      final path = items.first.path;
+      final original = File(path).readAsStringSync();
+      final cleaner = FileCleaner(backup: BackupStore.start(root.path));
+      for (final item in items) {
+        expect(cleaner.clean(item).success, isTrue);
+      }
+
+      BackupStore.latest(root.path)!.restoreAll();
+      expect(File(path).readAsStringSync(), original);
+    });
+
+    test('backups are invisible to the scanners', () {
+      final item = FileScanner(context).scan().single;
+      FileCleaner(backup: BackupStore.start(root.path)).clean(item);
+
+      final after = ProjectContext.load(root.path);
+      expect(
+        after.dartFiles.where((f) => f.relativePath.contains(backupDirName)),
+        isEmpty,
+      );
+      expect(
+        AssetScanner(after)
+            .scan()
+            .where((i) => i.relativePath.contains(backupDirName)),
+        isEmpty,
+      );
+    });
+
+    test('--restore brings back the last session', () async {
+      final item = AssetScanner(context).scan().first;
+      FileCleaner(backup: BackupStore.start(root.path)).clean(item);
+      expect(File(item.path).existsSync(), isFalse);
+
+      final code = await TrimCommandRunner(
+        logger: Logger(level: Level.quiet),
+        interactive: false,
+      ).run(['-p', root.path, '--restore']);
+      expect(code, ExitCodes.success);
+      expect(File(item.path).existsSync(), isTrue);
+    });
+  });
+
   group('ConfigLoader', () {
     test('reads flutter_trim.yaml', () {
       final configured = createFixture(
